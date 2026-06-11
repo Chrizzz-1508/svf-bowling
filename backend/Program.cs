@@ -17,8 +17,6 @@ if (string.IsNullOrWhiteSpace(jwtSecret))
     // Fallback nur für lokale Entwicklung – in Produktion JWT_SECRET als Env setzen!
     jwtSecret = "dev-only-super-secret-change-me-please-0123456789abcdef";
 }
-var corsOrigin = config["CORS_ORIGIN"] ?? "*";
-
 // Railway/Heroku liefern DATABASE_URL als postgres://-URL – in Npgsql-Form umwandeln.
 if (!string.IsNullOrEmpty(databaseUrl) &&
     (databaseUrl.StartsWith("postgres://") || databaseUrl.StartsWith("postgresql://")))
@@ -61,14 +59,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization(options =>
     options.AddPolicy("Admin", p => p.RequireRole("Admin")));
 
+// Öffentliche Read-API mit Bearer-Token-Auth (keine Cookies) → alle Origins erlaubt.
 builder.Services.AddCors(options => options.AddDefaultPolicy(p =>
-{
-    if (corsOrigin == "*")
-        p.AllowAnyOrigin();
-    else
-        p.WithOrigins(corsOrigin.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
-    p.AllowAnyHeader().AllowAnyMethod();
-}));
+    p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>

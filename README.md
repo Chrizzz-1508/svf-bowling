@@ -43,8 +43,10 @@ Die Konfiguration kommt aus Umgebungsvariablen **oder** `appsettings.Development
 | `ADMIN_USERNAME`  | Initiales Admin-Konto (wird beim Start angelegt)                 |
 | `ADMIN_PASSWORD`  | Passwort des initialen Admin-Kontos                              |
 | `ADMIN_EMAIL`     | (optional) E-Mail des Admin-Kontos                              |
-| `CORS_ORIGIN`     | Erlaubte Frontend-Domain, z. B. `https://name.github.io` (oder `*`) |
 | `SEED_DEMO_DATA`  | `true` = Beispiel-Berichte/-Tabellen anlegen                    |
+
+> CORS ist offen konfiguriert (alle Origins erlaubt) – die API ist eine öffentliche
+> Read-API mit Bearer-Token-Login (keine Cookies), daher unbedenklich.
 
 ### Frontend
 Kein Build nötig – einfach mit einem beliebigen statischen Server ausliefern, z. B.:
@@ -68,7 +70,6 @@ npx serve .        # oder ein anderer statischer Server / Live-Server in VS Code
 3. Unter *Variables* setzen:
    - `JWT_SECRET` = langer Zufallswert
    - `ADMIN_USERNAME`, `ADMIN_PASSWORD` (Erst-Login)
-   - `CORS_ORIGIN` = deine GitHub-Pages-URL (z. B. `https://deinname.github.io`)
    - `DATABASE_URL` ist durch das Postgres-Plugin meist schon vorhanden.
 4. Deploy abwarten → Railway vergibt eine öffentliche URL
    (z. B. `https://svf-bowling-backend.up.railway.app`). Swagger: `…/swagger`.
@@ -81,7 +82,6 @@ Die Datenbank wird beim Start automatisch migriert und geseedet.
 2. Den Ordner `frontend/` als GitHub-Pages-Quelle veröffentlichen – zwei gängige Wege:
    - Eigenes Repo `frontend/` → Pages aus dem Branch-Root, **oder**
    - im Haupt-Repo den Pages-Quellordner auf `/frontend` (bzw. Inhalt nach `/docs`) legen.
-3. Im Backend `CORS_ORIGIN` auf die finale Pages-URL setzen (siehe oben).
 
 Fertig – die öffentliche Seite lädt ihre Inhalte live aus dem Backend.
 
