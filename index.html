@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SV Fellbach – Abteilung Bowling</title>
+  <meta name="description" content="Berichte, Liga-Ergebnisse, Termine und Bilder der Bowling-Abteilung des SV Fellbach.">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-page="home">
+  <section class="hero">
+    <div class="container" id="hero-text">
+      <h1>Willkommen beim Bowling im SV Fellbach</h1>
+      <p>Berichte, Ergebnisse, Termine und Bilder unserer Abteilung – jetzt modern und mobilfreundlich.</p>
+      <a class="btn btn-light" href="news.html">Aktuelle Berichte</a>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="section-head">
+        <div><div class="accent"></div><h2>Aktuelle Berichte</h2></div>
+        <a class="btn btn-ghost btn-sm" href="news.html">Alle Berichte</a>
+      </div>
+      <div class="grid grid-3" id="home-news"></div>
+    </div>
+  </section>
+
+  <section class="section section-alt">
+    <div class="container">
+      <div class="section-head">
+        <div><div class="accent"></div><h2>Tabelle der aktuellen Saison</h2></div>
+        <a class="btn btn-ghost btn-sm" href="ergebnisse.html">Alle Ergebnisse</a>
+      </div>
+      <div id="home-standings"></div>
+    </div>
+  </section>
+
+  <script src="config.js"></script>
+  <script src="assets/js/api.js"></script>
+  <script src="assets/js/layout.js"></script>
+  <script src="assets/js/public.js"></script>
+</body>
+</html>

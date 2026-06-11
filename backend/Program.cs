@@ -9,6 +9,12 @@ using SvfBowling.Api.Endpoints;
 var builder = WebApplication.CreateBuilder(args);
 var config = builder.Configuration;
 
+// Railway (und andere PaaS) geben den Port zur Laufzeit über die PORT-Variable vor.
+// Explizit hier binden, damit der Router den Dienst sicher erreicht.
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(port))
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
 // ---------------- Konfiguration (Env-Variablen überschreiben appsettings) ----------------
 var databaseUrl = config["DATABASE_URL"];
 var jwtSecret = config["JWT_SECRET"];
