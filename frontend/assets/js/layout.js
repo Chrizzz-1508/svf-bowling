@@ -4,7 +4,7 @@
 // ============================================================================
 const LOGO_SVG = `
 <svg class="logo" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <circle cx="24" cy="24" r="22" fill="#d10a2a"/>
+  <circle cx="24" cy="24" r="22" fill="#c8102e"/>
   <circle cx="18" cy="18" r="3" fill="#fff"/>
   <circle cx="27" cy="16" r="2.2" fill="#fff"/>
   <circle cx="16" cy="27" r="2.2" fill="#fff"/>

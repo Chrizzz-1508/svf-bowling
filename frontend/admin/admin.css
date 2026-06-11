@@ -5,7 +5,9 @@
 
 /* ---- Login ---- */
 .login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 20px;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%); }
+  background:
+    radial-gradient(700px 300px at 85% 110%, rgba(200,16,46,.30), transparent 60%),
+    linear-gradient(150deg, #1b1f24 0%, #14171b 100%); }
 .login-card { background: #fff; border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 2rem; width: 100%; max-width: 380px; }
 .login-card h1 { font-size: 1.4rem; text-align: center; }
 .login-card .logo-row { display: grid; place-items: center; margin-bottom: .5rem; }

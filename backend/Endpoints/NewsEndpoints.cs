@@ -12,7 +12,7 @@ public static class NewsEndpoints
         // ---------- Öffentlich ----------
         var pub = app.MapGroup("/api/news").WithTags("News");
 
-        pub.MapGet("/", async (AppDbContext db, int? categoryId, int? teamId, int? take) =>
+        pub.MapGet("/", async (AppDbContext db, int? categoryId, int? teamId, int? take, int? skip) =>
         {
             var q = db.NewsArticles.Where(n => n.IsPublished);
             if (categoryId is not null) q = q.Where(n => n.CategoryId == categoryId);
@@ -20,6 +20,7 @@ public static class NewsEndpoints
 
             var list = await q
                 .OrderByDescending(n => n.PublishedAt)
+                .Skip(skip is > 0 ? skip.Value : 0)
                 .Take(take is > 0 and <= 100 ? take.Value : 50)
                 .Select(n => new
                 {
