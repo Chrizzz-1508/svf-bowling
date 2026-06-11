@@ -32,11 +32,10 @@ function newsCard(n) {
 }
 
 // ---- Generische Ergebnis-Tabelle rendern ----
-function renderStandings(table) {
+function renderStandings(table, hideTitle) {
   let columns = [];
   try { columns = JSON.parse(table.columnsJson || "[]"); } catch { columns = []; }
   if (!columns.length) {
-    // Fallback: Spalten aus erster Zeile ableiten
     const keys = table.rows && table.rows[0] ? Object.keys(safeJson(table.rows[0].valuesJson) || {}) : [];
     columns = keys.map(k => ({ key: k, label: k }));
   }
@@ -47,10 +46,50 @@ function renderStandings(table) {
       `<td${i === 0 ? ' class="rank"' : ""}>${escapeHtml(v[c.key] ?? "")}</td>`).join("") + "</tr>";
   }).join("");
   return `<div class="standings-block">
-    <h3>${escapeHtml(table.title)}</h3>
-    ${table.subtitle ? `<div class="sub">${escapeHtml(table.subtitle)}</div>` : ""}
+    ${hideTitle ? "" : `<h3>${escapeHtml(table.title)}</h3>
+    ${table.subtitle ? `<div class="sub">${escapeHtml(table.subtitle)}</div>` : ""}`}
     <div class="table-wrap"><table class="data"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
   </div>`;
+}
+
+// ---- Cache für einzelne Tabellen ----
+const standingsCache = {};
+async function getStandingsFull(id) {
+  if (!standingsCache[id]) standingsCache[id] = await SVF.get(`/api/standings/${id}`);
+  return standingsCache[id];
+}
+
+const RESULT_TYPE_DEFS = [
+  { key: "Liga", label: "Liga", entryLabel: "Tabelle" },
+  { key: "Monatspokal", label: "Monatspokal", entryLabel: "Monat" },
+  { key: "Vereinsmeisterschaft", label: "Vereinsmeisterschaft", entryLabel: "Wertung" },
+  { key: "Custom", label: "Weitere", entryLabel: "Tabelle" }
+];
+
+function normalizeResultType(type) {
+  return RESULT_TYPE_DEFS.some(d => d.key === type) ? type : "Custom";
+}
+
+function resultTypeDef(type) {
+  return RESULT_TYPE_DEFS.find(d => d.key === normalizeResultType(type)) || RESULT_TYPE_DEFS[0];
+}
+
+function sortSeasonsDesc(a, b) {
+  return (b.sortOrder || 0) - (a.sortOrder || 0) || b.name.localeCompare(a.name, "de-DE", { numeric: true });
+}
+
+function resultEntryLabel(table, type) {
+  let label = table.title || "";
+  if (type === "Monatspokal") label = label.replace(/^Monatspokal\s*[\u2013-]\s*/, "").trim();
+  if (type === "Vereinsmeisterschaft") label = label.replace(/^Vereinsmeisterschaft\s*[\u2013-]\s*/, "").trim();
+  return label || table.title || "Tabelle";
+}
+
+function sortResultEntries(list, type) {
+  return [...list].sort((a, b) =>
+    (a.sortOrder || 0) - (b.sortOrder || 0) ||
+    resultEntryLabel(a, type).localeCompare(resultEntryLabel(b, type), "de-DE", { numeric: true })
+  );
 }
 
 const PAGES = {
@@ -58,58 +97,90 @@ const PAGES = {
   async home() {
     try {
       const s = await SVF.get("/api/settings").catch(() => null);
-      const hero = document.getElementById("hero-text");
-      if (hero && s) hero.innerHTML =
-        `<h1>${escapeHtml(s.tagline || "Willkommen beim Bowling im SV Fellbach")}</h1>
-         <p>${escapeHtml(s.welcomeText || "")}</p>
-         <a class="btn btn-light" href="news.html">Aktuelle Berichte</a>`;
+      if (s) {
+        const h = document.getElementById("hero-title");
+        const p = document.getElementById("hero-text");
+        if (h && s.tagline) h.textContent = s.tagline;
+        if (p && s.welcomeText) p.textContent = s.welcomeText;
+      }
 
       loading("home-news");
       const news = await SVF.get("/api/news?take=3");
       document.getElementById("home-news").innerHTML =
         news.length ? news.map(newsCard).join("") : `<div class="empty">Noch keine Berichte.</div>`;
 
-      // Aktuelle Liga-Tabelle (erste veröffentlichte Liga-Tabelle der aktuellen Saison)
+      // Aktuelle Liga-Tabelle
       const seasons = await SVF.get("/api/seasons");
       const current = seasons.find(x => x.isCurrent) || seasons[0];
       const tables = await SVF.get(`/api/standings?type=Liga${current ? "&seasonId=" + current.id : ""}`);
       const box = document.getElementById("home-standings");
       if (tables.length) {
-        const full = await SVF.get(`/api/standings/${tables[0].id}`);
+        const full = await getStandingsFull(tables[0].id);
         box.innerHTML = renderStandings(full);
       } else {
         box.innerHTML = `<div class="empty">Noch keine Ligatabelle.</div>`;
       }
+
+      // Nächste Termine
+      const evBox = document.getElementById("home-events");
+      if (evBox) {
+        const events = await SVF.get("/api/events?upcoming=true").catch(() => []);
+        evBox.innerHTML = events.length
+          ? events.slice(0, 4).map(eventRow).join("")
+          : `<div class="empty">Keine anstehenden Termine.</div>`;
+      }
     } catch (e) { showError("home-news", e.message); }
   },
 
-  // -------------------- Berichte --------------------
+  // -------------------- Berichte (mit Mehr-laden) --------------------
   async news() {
     const filterBox = document.getElementById("news-filter");
-    const listBox = "news-list";
+    const listEl = document.getElementById("news-list");
+    const moreWrap = document.getElementById("news-more");
+    const PAGE = 12;
     let categories = [];
     try { categories = await SVF.get("/api/categories"); } catch { /* */ }
 
     let activeCat = qs("category") ? parseInt(qs("category")) : null;
+    let offset = 0;
+
     function renderPills() {
       filterBox.innerHTML =
         `<button class="pill ${activeCat === null ? "active" : ""}" data-cat="">Alle</button>` +
         categories.map(c => `<button class="pill ${activeCat === c.id ? "active" : ""}" data-cat="${c.id}">${escapeHtml(c.name)}</button>`).join("");
       filterBox.querySelectorAll(".pill").forEach(p => p.addEventListener("click", () => {
         activeCat = p.dataset.cat ? parseInt(p.dataset.cat) : null;
-        renderPills(); load();
+        offset = 0;
+        renderPills(); load(true);
       }));
     }
-    async function load() {
-      loading(listBox);
+
+    async function load(reset) {
+      if (reset) { listEl.innerHTML = `<div class="loader" style="grid-column:1/-1"><div class="spinner"></div>Lädt…</div>`; moreWrap.innerHTML = ""; }
       try {
-        const news = await SVF.get("/api/news" + (activeCat ? `?categoryId=${activeCat}` : ""));
-        document.getElementById(listBox).innerHTML =
-          news.length ? news.map(newsCard).join("") : `<div class="empty">Keine Berichte in dieser Kategorie.</div>`;
-      } catch (e) { showError(listBox, e.message); }
+        // take = PAGE+1: das Extra-Element verrät, ob es weitere gibt
+        const params = new URLSearchParams({ take: PAGE + 1, skip: offset });
+        if (activeCat) params.set("categoryId", activeCat);
+        const batch = await SVF.get("/api/news?" + params);
+        const hasMore = batch.length > PAGE;
+        const items = batch.slice(0, PAGE);
+
+        if (reset) listEl.innerHTML = "";
+        if (!items.length && offset === 0) {
+          listEl.innerHTML = `<div class="empty" style="grid-column:1/-1">Keine Berichte in dieser Kategorie.</div>`;
+        } else {
+          listEl.insertAdjacentHTML("beforeend", items.map(newsCard).join(""));
+        }
+        offset += items.length;
+
+        moreWrap.innerHTML = hasMore ? `<button class="btn btn-ghost" id="more-btn">Ältere Berichte anzeigen</button>` : "";
+        const btn = document.getElementById("more-btn");
+        if (btn) btn.addEventListener("click", () => { btn.disabled = true; btn.textContent = "Lädt…"; load(false); });
+      } catch (e) { showError("news-list", e.message); }
     }
+
     renderPills();
-    load();
+    load(true);
   },
 
   // -------------------- Einzel-Artikel --------------------
@@ -132,30 +203,140 @@ const PAGES = {
     }
   },
 
-  // -------------------- Ergebnisse --------------------
+  // -------------------- Ergebnisse (eine Tabelle, klare Filter) --------------------
   async ergebnisse() {
-    const selBox = document.getElementById("season-select");
+    const typeSel = document.getElementById("result-type-select");
+    const seasonSel = document.getElementById("season-select");
+    const entrySel = document.getElementById("result-entry-select");
+    const entryLabel = document.getElementById("entry-filter-label");
+    const summary = document.getElementById("result-summary");
     const box = "results";
+
     let seasons = [];
-    try { seasons = await SVF.get("/api/seasons"); } catch (e) { showError(box, e.message); return; }
+    let tables = [];
+    try {
+      [seasons, tables] = await Promise.all([SVF.get("/api/seasons"), SVF.get("/api/standings")]);
+    } catch (e) { showError(box, e.message); return; }
+
     if (!seasons.length) { empty(box, "Noch keine Saison angelegt."); return; }
+    if (!tables.length) { empty(box, "Noch keine Ergebnisse eingetragen."); return; }
 
+    seasons.sort(sortSeasonsDesc);
+    const seasonById = new Map(seasons.map(s => [s.id, s]));
     const current = seasons.find(s => s.isCurrent) || seasons[0];
-    selBox.innerHTML = seasons.map(s => `<option value="${s.id}" ${s.id === current.id ? "selected" : ""}>${escapeHtml(s.name)}</option>`).join("");
-    selBox.addEventListener("change", () => load(parseInt(selBox.value)));
+    let activeType = normalizeResultType(qs("type") || "Liga");
+    let activeSeasonId = Number(qs("season")) || current.id;
+    let activeEntryId = Number(qs("table")) || null;
 
-    async function load(seasonId) {
+    const tablesFor = (type, seasonId) => sortResultEntries(
+      tables.filter(t => normalizeResultType(t.type) === type && t.seasonId === seasonId),
+      type
+    );
+
+    const seasonsForType = type => seasons.filter(s => tablesFor(type, s.id).length);
+
+    const availableTypes = RESULT_TYPE_DEFS.filter(def =>
+      tables.some(t => normalizeResultType(t.type) === def.key)
+    );
+
+    if (!availableTypes.some(def => def.key === activeType)) activeType = availableTypes[0]?.key || "Liga";
+
+    function chooseSeasonForType(type, preferredSeasonId) {
+      const options = seasonsForType(type);
+      return options.find(s => s.id === preferredSeasonId)?.id ||
+        options.find(s => s.id === current.id)?.id ||
+        options[0]?.id ||
+        null;
+    }
+
+    function setUrl(tableId) {
+      const params = new URLSearchParams();
+      params.set("type", activeType);
+      if (activeSeasonId) params.set("season", activeSeasonId);
+      if (tableId) params.set("table", tableId);
+      history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
+    }
+
+    function renderTypeSelect() {
+      typeSel.innerHTML = availableTypes.map(def =>
+        `<option value="${def.key}" ${def.key === activeType ? "selected" : ""}>${escapeHtml(def.label)}</option>`
+      ).join("");
+    }
+
+    function renderSeasonSelect() {
+      const options = seasonsForType(activeType);
+      activeSeasonId = chooseSeasonForType(activeType, activeSeasonId);
+      seasonSel.innerHTML = options.map(s =>
+        `<option value="${s.id}" ${s.id === activeSeasonId ? "selected" : ""}>${escapeHtml(s.name)}</option>`
+      ).join("");
+    }
+
+    async function renderEntrySelect() {
+      const def = resultTypeDef(activeType);
+      const list = tablesFor(activeType, activeSeasonId);
+      entryLabel.textContent = def.entryLabel;
+      entrySel.innerHTML = list.map(t => {
+        const label = resultEntryLabel(t, activeType);
+        return `<option value="${t.id}" ${t.id === activeEntryId ? "selected" : ""}>${escapeHtml(label)}</option>`;
+      }).join("");
+
+      if (!list.length) {
+        summary.textContent = "";
+        empty(box, "Für diese Auswahl sind noch keine Ergebnisse eingetragen.");
+        return;
+      }
+
+      if (!list.some(t => t.id === activeEntryId)) activeEntryId = list[0].id;
+      entrySel.value = String(activeEntryId);
+      await showSelectedTable();
+    }
+
+    async function showSelectedTable() {
+      const tableMeta = tables.find(t => t.id === activeEntryId);
+      if (!tableMeta) { empty(box, "Diese Tabelle ist nicht mehr verfügbar."); return; }
+
+      const season = seasonById.get(activeSeasonId);
+      const def = resultTypeDef(activeType);
+      const entry = resultEntryLabel(tableMeta, activeType);
+      summary.innerHTML = `
+        <span>${escapeHtml(def.label)}</span>
+        <span>${escapeHtml(season?.name || "")}</span>
+        <span>${escapeHtml(entry)}</span>`;
+
       loading(box);
       try {
-        const tables = await SVF.get(`/api/standings?seasonId=${seasonId}`);
-        if (!tables.length) { empty(box, "Für diese Saison sind noch keine Ergebnisse eingetragen."); return; }
-        const order = { Liga: 0, Monatspokal: 1, Vereinsmeisterschaft: 2, Custom: 3 };
-        tables.sort((a, b) => (order[a.type] ?? 9) - (order[b.type] ?? 9) || a.sortOrder - b.sortOrder);
-        const full = await Promise.all(tables.map(t => SVF.get(`/api/standings/${t.id}`)));
-        document.getElementById(box).innerHTML = full.map(renderStandings).join("");
+        const full = await getStandingsFull(activeEntryId);
+        document.getElementById(box).innerHTML = renderStandings(full);
+        setUrl(activeEntryId);
       } catch (e) { showError(box, e.message); }
     }
-    load(current.id);
+
+    function refreshAll() {
+      renderTypeSelect();
+      renderSeasonSelect();
+      renderEntrySelect();
+    }
+
+    typeSel.addEventListener("change", () => {
+      activeType = typeSel.value;
+      activeSeasonId = chooseSeasonForType(activeType, current.id);
+      activeEntryId = null;
+      refreshAll();
+    });
+
+    seasonSel.addEventListener("change", () => {
+      activeSeasonId = Number(seasonSel.value);
+      activeEntryId = null;
+      renderEntrySelect();
+    });
+
+    entrySel.addEventListener("change", () => {
+      activeEntryId = Number(entrySel.value);
+      showSelectedTable();
+    });
+
+    activeSeasonId = chooseSeasonForType(activeType, activeSeasonId);
+    refreshAll();
   },
 
   // -------------------- Mannschaften --------------------
@@ -235,18 +416,17 @@ const PAGES = {
     try {
       const events = await SVF.get("/api/events");
       if (!events.length) { empty(box, "Aktuell sind keine Termine eingetragen."); return; }
-      document.getElementById(box).innerHTML = events.map(e => {
-        const d = new Date(e.startDate);
-        const day = isNaN(d) ? "–" : d.getDate();
-        const mon = isNaN(d) ? "" : d.toLocaleDateString("de-DE", { month: "short" });
-        return `<div class="event">
-          <div class="date-chip"><div class="d">${day}</div><div class="m">${escapeHtml(mon)}</div></div>
-          <div>
-            <strong>${escapeHtml(e.title)}</strong>
-            <div class="meta">${formatDate(e.startDate, true)}${e.location ? " · " + escapeHtml(e.location) : ""}</div>
-            ${e.description ? `<p style="margin:.4rem 0 0">${escapeHtml(e.description)}</p>` : ""}
-          </div></div>`;
-      }).join("");
+      const now = new Date(); now.setHours(0, 0, 0, 0);
+      const upcoming = events.filter(e => new Date(e.endDate || e.startDate) >= now);
+      const past = events.filter(e => new Date(e.endDate || e.startDate) < now);
+      let html = "";
+      if (upcoming.length) html += upcoming.map(eventRow).join("");
+      else html += `<div class="empty">Keine anstehenden Termine.</div>`;
+      if (past.length) {
+        html += `<details style="margin-top:1.6rem"><summary class="muted" style="cursor:pointer;font-weight:600">Vergangene Termine (${past.length})</summary>
+          <div style="margin-top:1rem;opacity:.7">${past.reverse().map(eventRow).join("")}</div></details>`;
+      }
+      document.getElementById(box).innerHTML = html;
     } catch (e) { showError(box, e.message); }
   },
 
@@ -255,7 +435,7 @@ const PAGES = {
     try {
       const page = await SVF.get("/api/pages/verein").catch(() => null);
       const content = document.getElementById("verein-content");
-      if (content) content.innerHTML = page ? `<h1>${escapeHtml(page.title)}</h1>${page.contentHtml}` : "<h1>Über uns</h1>";
+      if (content) content.innerHTML = page ? `<h1>${escapeHtml(page.title)}</h1><div class="article-content">${page.contentHtml}</div>` : "<h1>Über uns</h1>";
     } catch { /* */ }
     const box = "downloads";
     loading(box);
@@ -265,13 +445,13 @@ const PAGES = {
         ? dls.map(d => `<div class="dl-item">
             <span class="file-ico">📄</span>
             <div class="grow"><strong>${escapeHtml(d.title)}</strong>${d.description ? `<div class="meta">${escapeHtml(d.description)}</div>` : ""}</div>
-            <a class="btn btn-sm" href="${SVF.downloadUrl(d.id)}" target="_blank" rel="noopener">Download</a>
+            <a class="btn btn-sm btn-ghost" href="${SVF.downloadUrl(d.id)}" target="_blank" rel="noopener">Download</a>
           </div>`).join("")
         : `<div class="empty">Keine Downloads vorhanden.</div>`;
     } catch (e) { showError(box, e.message); }
   },
 
-  // -------------------- Statische Seite (Impressum/Datenschutz) --------------------
+  // -------------------- Statische Seite --------------------
   async page() {
     const slug = document.body.dataset.slug;
     const box = document.getElementById("page-content");
@@ -279,12 +459,28 @@ const PAGES = {
     try {
       const p = await SVF.get("/api/pages/" + slug);
       document.title = p.title + " – SV Fellbach Bowling";
-      box.innerHTML = `<div class="article"><h1>${escapeHtml(p.title)}</h1>${p.contentHtml}</div>`;
+      box.innerHTML = `<div class="article"><h1>${escapeHtml(p.title)}</h1><div class="article-content">${p.contentHtml}</div></div>`;
     } catch (e) {
       box.innerHTML = e.status === 404 ? `<div class="empty">Diese Seite wurde noch nicht angelegt.</div>` : `<div class="error-box">${escapeHtml(e.message)}</div>`;
     }
   }
 };
+
+// ---- Termin-Zeile ----
+function eventRow(e) {
+  const d = new Date(e.startDate);
+  const day = isNaN(d) ? "–" : d.getDate();
+  const mon = isNaN(d) ? "" : d.toLocaleDateString("de-DE", { month: "short" });
+  const range = e.endDate && e.endDate !== e.startDate
+    ? `${formatDate(e.startDate)} – ${formatDate(e.endDate)}` : formatDate(e.startDate);
+  return `<div class="event">
+    <div class="date-chip"><div class="d">${day}</div><div class="m">${escapeHtml(mon)}</div></div>
+    <div>
+      <strong>${escapeHtml(e.title)}</strong>
+      <div class="meta">${range}${e.location ? " · " + escapeHtml(e.location) : ""}</div>
+      ${e.description ? `<p style="margin:.4rem 0 0">${escapeHtml(e.description)}</p>` : ""}
+    </div></div>`;
+}
 
 function initLightbox() {
   let lb = document.querySelector(".lightbox");

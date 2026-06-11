@@ -7,16 +7,39 @@
   <link rel="stylesheet" href="assets/css/styles.css">
 </head>
 <body data-page="ergebnisse">
-  <section class="section">
+  <section class="section results-page">
     <div class="container">
       <div class="section-head">
-        <div><div class="accent"></div><h2>Ergebnisse</h2></div>
-        <label class="select-wrap">
-          <select id="season-select" aria-label="Saison wählen"></select>
-        </label>
+        <div>
+          <div class="accent"></div>
+          <h2>Ergebnisse</h2>
+          <p class="section-copy">Liga, Monatspokal und weitere Wertungen bleiben getrennt. Wähle Bereich, Saison und die konkrete Tabelle.</p>
+        </div>
       </div>
-      <div class="tabs" id="result-tabs"></div>
-      <div id="results"></div>
+      <div class="results-shell">
+        <div class="result-toolbar" aria-label="Ergebnisfilter">
+          <div class="filter-field">
+            <label for="result-type-select">Bereich</label>
+            <span class="select-wrap">
+              <select id="result-type-select" aria-label="Bereich wählen"></select>
+            </span>
+          </div>
+          <div class="filter-field">
+            <label for="season-select">Jahr</label>
+            <span class="select-wrap">
+              <select id="season-select" aria-label="Jahr wählen"></select>
+            </span>
+          </div>
+          <div class="filter-field">
+            <label id="entry-filter-label" for="result-entry-select">Monat</label>
+            <span class="select-wrap">
+              <select id="result-entry-select" aria-label="Monat oder Tabelle wählen"></select>
+            </span>
+          </div>
+        </div>
+        <div class="result-summary" id="result-summary" aria-live="polite"></div>
+        <div id="results"></div>
+      </div>
     </div>
   </section>
 

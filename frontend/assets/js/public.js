@@ -59,6 +59,39 @@ async function getStandingsFull(id) {
   return standingsCache[id];
 }
 
+const RESULT_TYPE_DEFS = [
+  { key: "Liga", label: "Liga", entryLabel: "Tabelle" },
+  { key: "Monatspokal", label: "Monatspokal", entryLabel: "Monat" },
+  { key: "Vereinsmeisterschaft", label: "Vereinsmeisterschaft", entryLabel: "Wertung" },
+  { key: "Custom", label: "Weitere", entryLabel: "Tabelle" }
+];
+
+function normalizeResultType(type) {
+  return RESULT_TYPE_DEFS.some(d => d.key === type) ? type : "Custom";
+}
+
+function resultTypeDef(type) {
+  return RESULT_TYPE_DEFS.find(d => d.key === normalizeResultType(type)) || RESULT_TYPE_DEFS[0];
+}
+
+function sortSeasonsDesc(a, b) {
+  return (b.sortOrder || 0) - (a.sortOrder || 0) || b.name.localeCompare(a.name, "de-DE", { numeric: true });
+}
+
+function resultEntryLabel(table, type) {
+  let label = table.title || "";
+  if (type === "Monatspokal") label = label.replace(/^Monatspokal\s*[\u2013-]\s*/, "").trim();
+  if (type === "Vereinsmeisterschaft") label = label.replace(/^Vereinsmeisterschaft\s*[\u2013-]\s*/, "").trim();
+  return label || table.title || "Tabelle";
+}
+
+function sortResultEntries(list, type) {
+  return [...list].sort((a, b) =>
+    (a.sortOrder || 0) - (b.sortOrder || 0) ||
+    resultEntryLabel(a, type).localeCompare(resultEntryLabel(b, type), "de-DE", { numeric: true })
+  );
+}
+
 const PAGES = {
   // -------------------- Startseite --------------------
   async home() {
@@ -170,120 +203,140 @@ const PAGES = {
     }
   },
 
-  // -------------------- Ergebnisse (Tabs + Pills + Dropdown) --------------------
+  // -------------------- Ergebnisse (eine Tabelle, klare Filter) --------------------
   async ergebnisse() {
+    const typeSel = document.getElementById("result-type-select");
     const seasonSel = document.getElementById("season-select");
-    const tabsEl = document.getElementById("result-tabs");
+    const entrySel = document.getElementById("result-entry-select");
+    const entryLabel = document.getElementById("entry-filter-label");
+    const summary = document.getElementById("result-summary");
     const box = "results";
 
     let seasons = [];
-    try { seasons = await SVF.get("/api/seasons"); } catch (e) { showError(box, e.message); return; }
+    let tables = [];
+    try {
+      [seasons, tables] = await Promise.all([SVF.get("/api/seasons"), SVF.get("/api/standings")]);
+    } catch (e) { showError(box, e.message); return; }
+
     if (!seasons.length) { empty(box, "Noch keine Saison angelegt."); return; }
+    if (!tables.length) { empty(box, "Noch keine Ergebnisse eingetragen."); return; }
 
-    // Nur Saisons mit aktueller zuerst sortieren (neueste oben)
-    seasons.sort((a, b) => b.name.localeCompare(a.name));
+    seasons.sort(sortSeasonsDesc);
+    const seasonById = new Map(seasons.map(s => [s.id, s]));
     const current = seasons.find(s => s.isCurrent) || seasons[0];
-    seasonSel.innerHTML = seasons.map(s => `<option value="${s.id}" ${s.id === current.id ? "selected" : ""}>${escapeHtml(s.name)}</option>`).join("");
-    seasonSel.addEventListener("change", () => loadSeason(parseInt(seasonSel.value)));
+    let activeType = normalizeResultType(qs("type") || "Liga");
+    let activeSeasonId = Number(qs("season")) || current.id;
+    let activeEntryId = Number(qs("table")) || null;
 
-    let activeTab = "Liga";
+    const tablesFor = (type, seasonId) => sortResultEntries(
+      tables.filter(t => normalizeResultType(t.type) === type && t.seasonId === seasonId),
+      type
+    );
 
-    async function loadSeason(seasonId) {
+    const seasonsForType = type => seasons.filter(s => tablesFor(type, s.id).length);
+
+    const availableTypes = RESULT_TYPE_DEFS.filter(def =>
+      tables.some(t => normalizeResultType(t.type) === def.key)
+    );
+
+    if (!availableTypes.some(def => def.key === activeType)) activeType = availableTypes[0]?.key || "Liga";
+
+    function chooseSeasonForType(type, preferredSeasonId) {
+      const options = seasonsForType(type);
+      return options.find(s => s.id === preferredSeasonId)?.id ||
+        options.find(s => s.id === current.id)?.id ||
+        options[0]?.id ||
+        null;
+    }
+
+    function setUrl(tableId) {
+      const params = new URLSearchParams();
+      params.set("type", activeType);
+      if (activeSeasonId) params.set("season", activeSeasonId);
+      if (tableId) params.set("table", tableId);
+      history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
+    }
+
+    function renderTypeSelect() {
+      typeSel.innerHTML = availableTypes.map(def =>
+        `<option value="${def.key}" ${def.key === activeType ? "selected" : ""}>${escapeHtml(def.label)}</option>`
+      ).join("");
+    }
+
+    function renderSeasonSelect() {
+      const options = seasonsForType(activeType);
+      activeSeasonId = chooseSeasonForType(activeType, activeSeasonId);
+      seasonSel.innerHTML = options.map(s =>
+        `<option value="${s.id}" ${s.id === activeSeasonId ? "selected" : ""}>${escapeHtml(s.name)}</option>`
+      ).join("");
+    }
+
+    async function renderEntrySelect() {
+      const def = resultTypeDef(activeType);
+      const list = tablesFor(activeType, activeSeasonId);
+      entryLabel.textContent = def.entryLabel;
+      entrySel.innerHTML = list.map(t => {
+        const label = resultEntryLabel(t, activeType);
+        return `<option value="${t.id}" ${t.id === activeEntryId ? "selected" : ""}>${escapeHtml(label)}</option>`;
+      }).join("");
+
+      if (!list.length) {
+        summary.textContent = "";
+        empty(box, "Für diese Auswahl sind noch keine Ergebnisse eingetragen.");
+        return;
+      }
+
+      if (!list.some(t => t.id === activeEntryId)) activeEntryId = list[0].id;
+      entrySel.value = String(activeEntryId);
+      await showSelectedTable();
+    }
+
+    async function showSelectedTable() {
+      const tableMeta = tables.find(t => t.id === activeEntryId);
+      if (!tableMeta) { empty(box, "Diese Tabelle ist nicht mehr verfügbar."); return; }
+
+      const season = seasonById.get(activeSeasonId);
+      const def = resultTypeDef(activeType);
+      const entry = resultEntryLabel(tableMeta, activeType);
+      summary.innerHTML = `
+        <span>${escapeHtml(def.label)}</span>
+        <span>${escapeHtml(season?.name || "")}</span>
+        <span>${escapeHtml(entry)}</span>`;
+
       loading(box);
-      tabsEl.innerHTML = "";
       try {
-        const tables = await SVF.get(`/api/standings?seasonId=${seasonId}`);
-        if (!tables.length) { empty(box, "Für diese Saison sind noch keine Ergebnisse eingetragen."); return; }
-
-        const groups = { Liga: [], Monatspokal: [], Vereinsmeisterschaft: [], Custom: [] };
-        tables.forEach(t => (groups[t.type] || groups.Custom).push(t));
-        Object.values(groups).forEach(g => g.sort((a, b) => a.sortOrder - b.sortOrder));
-
-        const tabDefs = [
-          ["Liga", "Liga"], ["Monatspokal", "Monatspokal"],
-          ["Vereinsmeisterschaft", "Vereinsmeisterschaft"], ["Custom", "Weitere"]
-        ].filter(([k]) => groups[k].length || k === "Vereinsmeisterschaft");
-
-        if (!tabDefs.some(([k]) => k === activeTab)) activeTab = tabDefs[0][0];
-
-        tabsEl.innerHTML = tabDefs.map(([k, label]) =>
-          `<button class="tab ${k === activeTab ? "active" : ""}" data-tab="${k}">${label}</button>`).join("");
-        tabsEl.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => {
-          activeTab = b.dataset.tab;
-          tabsEl.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x === b));
-          renderTab(groups);
-        }));
-
-        renderTab(groups);
+        const full = await getStandingsFull(activeEntryId);
+        document.getElementById(box).innerHTML = renderStandings(full);
+        setUrl(activeEntryId);
       } catch (e) { showError(box, e.message); }
     }
 
-    async function renderTab(groups) {
-      const el = document.getElementById(box);
-      const list = groups[activeTab] || [];
-
-      // --- Vereinsmeisterschaft: Tabellen + Verweis auf Berichte ---
-      if (activeTab === "Vereinsmeisterschaft") {
-        let html = "";
-        for (const t of list) html += renderStandings(await getStandingsFull(t.id));
-        let vmCatId = null;
-        try {
-          const cats = await SVF.get("/api/categories");
-          vmCatId = (cats.find(c => c.name === "Vereinsmeisterschaft") || {}).id;
-        } catch { /* */ }
-        html += `<div class="empty">Die Ergebnisse der Vereinsmeisterschaften findest du in den
-          <a href="news.html${vmCatId ? "?category=" + vmCatId : ""}">Berichten zur Vereinsmeisterschaft</a>.</div>`;
-        el.innerHTML = html;
-        return;
-      }
-
-      if (!list.length) { empty(box, "Hier gibt es für diese Saison keine Einträge."); return; }
-
-      // --- Monatspokal: Dropdown (Gesamtwertung + Monate) ---
-      if (activeTab === "Monatspokal") {
-        const options = list.map(t => {
-          const label = t.title.replace(/^Monatspokal\s*[–-]\s*/, "");
-          return `<option value="${t.id}">${escapeHtml(label)}</option>`;
-        }).join("");
-        el.innerHTML = `
-          <div style="display:flex;align-items:center;gap:.8rem;margin-bottom:1.2rem;flex-wrap:wrap">
-            <strong>Wertung:</strong>
-            <span class="select-wrap"><select id="mp-select">${options}</select></span>
-          </div>
-          <div id="mp-table"><div class="loader"><div class="spinner"></div></div></div>`;
-        const sel = document.getElementById("mp-select");
-        const show = async () => {
-          document.getElementById("mp-table").innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
-          const full = await getStandingsFull(parseInt(sel.value));
-          document.getElementById("mp-table").innerHTML = renderStandings(full, true);
-        };
-        sel.addEventListener("change", show);
-        show();
-        return;
-      }
-
-      // --- Liga / Weitere: Pills pro Tabelle (Mannschaft) ---
-      if (list.length === 1) {
-        el.innerHTML = renderStandings(await getStandingsFull(list[0].id));
-        return;
-      }
-      el.innerHTML = `
-        <div class="pills" id="liga-pills">${list.map((t, i) =>
-          `<button class="pill ${i === 0 ? "active" : ""}" data-id="${t.id}">${escapeHtml(t.title)}</button>`).join("")}</div>
-        <div id="liga-table"><div class="loader"><div class="spinner"></div></div></div>`;
-      const showLiga = async id => {
-        document.getElementById("liga-table").innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
-        const full = await getStandingsFull(id);
-        document.getElementById("liga-table").innerHTML = renderStandings(full, false);
-      };
-      el.querySelectorAll("#liga-pills .pill").forEach(p => p.addEventListener("click", () => {
-        el.querySelectorAll("#liga-pills .pill").forEach(x => x.classList.toggle("active", x === p));
-        showLiga(parseInt(p.dataset.id));
-      }));
-      showLiga(list[0].id);
+    function refreshAll() {
+      renderTypeSelect();
+      renderSeasonSelect();
+      renderEntrySelect();
     }
 
-    loadSeason(current.id);
+    typeSel.addEventListener("change", () => {
+      activeType = typeSel.value;
+      activeSeasonId = chooseSeasonForType(activeType, current.id);
+      activeEntryId = null;
+      refreshAll();
+    });
+
+    seasonSel.addEventListener("change", () => {
+      activeSeasonId = Number(seasonSel.value);
+      activeEntryId = null;
+      renderEntrySelect();
+    });
+
+    entrySel.addEventListener("change", () => {
+      activeEntryId = Number(entrySel.value);
+      showSelectedTable();
+    });
+
+    activeSeasonId = chooseSeasonForType(activeType, activeSeasonId);
+    refreshAll();
   },
 
   // -------------------- Mannschaften --------------------

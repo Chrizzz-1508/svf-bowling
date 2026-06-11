@@ -9,10 +9,32 @@
 </head>
 <body data-page="home">
   <section class="hero">
-    <div class="container" id="hero-text">
-      <h1>Willkommen beim Bowling im SV Fellbach</h1>
-      <p>Berichte, Ergebnisse, Termine und Bilder unserer Abteilung – jetzt modern und mobilfreundlich.</p>
-      <a class="btn btn-light" href="news.html">Aktuelle Berichte</a>
+    <div class="container">
+      <div>
+        <span class="kicker">SV Fellbach · Abteilung Bowling</span>
+        <h1 id="hero-title">Bowling mit Herz und Leidenschaft</h1>
+        <p id="hero-text">Berichte, Ergebnisse, Termine und Bilder unserer Abteilung – von der Jugend bis zur Oberliga.</p>
+        <div class="actions">
+          <a class="btn" href="ergebnisse.html">Aktuelle Ergebnisse</a>
+          <a class="btn btn-light" href="news.html">Berichte lesen</a>
+        </div>
+      </div>
+      <div class="hero-art" id="hero-art">
+        <!-- Platzhalter – wird durch Cartoon-Grafik ersetzt (assets/img/hero.png) -->
+        <svg viewBox="0 0 220 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <g opacity=".92">
+            <path d="M88 18c0 10-5 18-5 30 0 14 9 22 9 44 0 30-12 46-12 66 0 14 8 24 22 24s22-10 22-24c0-20-12-36-12-66 0-22 9-30 9-44 0-12-5-20-5-30 0-8-6-14-14-14s-14 6-14 14z" fill="#f4f4f2"/>
+            <rect x="92" y="52" width="40" height="9" rx="4.5" fill="#8f1d2c"/>
+            <rect x="94" y="66" width="36" height="6" rx="3" fill="#8f1d2c" opacity=".55"/>
+            <path d="M40 38c0 8-4 14-4 24 0 11 7 17 7 34 0 24-10 36-10 52 0 11 7 19 18 19s18-8 18-19c0-16-10-28-10-52 0-17 7-23 7-34 0-10-4-16-4-24 0-7-5-11-11-11s-11 4-11 11z" fill="#f4f4f2" opacity=".55"/>
+          </g>
+          <circle cx="164" cy="148" r="34" fill="#8f1d2c"/>
+          <circle cx="154" cy="138" r="4" fill="#14171b"/>
+          <circle cx="166" cy="134" r="4" fill="#14171b"/>
+          <circle cx="162" cy="146" r="4" fill="#14171b"/>
+          <ellipse cx="110" cy="190" rx="92" ry="7" fill="#000" opacity=".35"/>
+        </svg>
+      </div>
     </div>
   </section>
 
@@ -33,6 +55,16 @@
         <a class="btn btn-ghost btn-sm" href="ergebnisse.html">Alle Ergebnisse</a>
       </div>
       <div id="home-standings"></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="section-head">
+        <div><div class="accent"></div><h2>Nächste Termine</h2></div>
+        <a class="btn btn-ghost btn-sm" href="termine.html">Alle Termine</a>
+      </div>
+      <div id="home-events"></div>
     </div>
   </section>
 
