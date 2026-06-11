@@ -5,5 +5,5 @@
 //  Für lokale Entwicklung zeigt sie auf das lokal laufende Backend.
 // ============================================================================
 window.SVF_CONFIG = {
-  API_BASE_URL: "postgresql://postgres:SrdSKspIjAZRYkguVQkwZFsInCaXyzhM@postgres.railway.internal:5432/railway"
+  API_BASE_URL: "https://svf-bowling-production.up.railway.app/"
 };
