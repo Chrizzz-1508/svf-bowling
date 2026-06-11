@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using SvfBowling.Api.Models;
@@ -16,7 +17,10 @@ public class JwtTokenService
 
     public JwtTokenService(string secret)
     {
-        _key = Encoding.UTF8.GetBytes(secret);
+        // HS256 erfordert einen Schlüssel mit mindestens 256 Bit. Aus dem konfigurierten
+        // Secret leiten wir per SHA-256 immer einen 32-Byte-Schlüssel ab – so funktioniert die
+        // Token-Erstellung unabhängig von der Länge des gesetzten JWT_SECRET.
+        _key = SHA256.HashData(Encoding.UTF8.GetBytes(secret ?? string.Empty));
     }
 
     public SymmetricSecurityKey SecurityKey => new(_key);

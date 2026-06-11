@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SvfBowling.Api.Models;
 
 namespace SvfBowling.Api.Data;
@@ -38,5 +39,30 @@ public class AppDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
 
         b.Entity<Image>().HasIndex(i => i.AlbumId);
+
+        // PostgreSQL "timestamp with time zone" verlangt DateTime mit Kind=Utc.
+        // Eingaben aus Formularen (datetime-local) oder mit Offset kommen aber als
+        // Unspecified/Local an – hier werden alle DateTimes nach UTC normalisiert,
+        // damit Schreibzugriffe nie an Npgsql scheitern.
+        var utcConverter = new ValueConverter<DateTime, DateTime>(
+            v => v.Kind == DateTimeKind.Utc ? v
+               : v.Kind == DateTimeKind.Local ? v.ToUniversalTime()
+               : DateTime.SpecifyKind(v, DateTimeKind.Utc),
+            v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+        var utcNullableConverter = new ValueConverter<DateTime?, DateTime?>(
+            v => v == null ? v
+               : v.Value.Kind == DateTimeKind.Utc ? v
+               : v.Value.Kind == DateTimeKind.Local ? v.Value.ToUniversalTime()
+               : DateTime.SpecifyKind(v.Value, DateTimeKind.Utc),
+            v => v == null ? v : DateTime.SpecifyKind(v.Value, DateTimeKind.Utc));
+
+        foreach (var entityType in b.Model.GetEntityTypes())
+        {
+            foreach (var property in entityType.GetProperties())
+            {
+                if (property.ClrType == typeof(DateTime)) property.SetValueConverter(utcConverter);
+                else if (property.ClrType == typeof(DateTime?)) property.SetValueConverter(utcNullableConverter);
+            }
+        }
     }
 }
