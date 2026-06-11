@@ -67,10 +67,13 @@ npx serve .        # oder ein anderer statischer Server / Live-Server in VS Code
 1. Neues Railway-Projekt → **PostgreSQL** als Plugin hinzufügen (liefert `DATABASE_URL`).
 2. Neuen **Service** aus diesem Repo erstellen; **Root Directory = `backend`**
    (Railway erkennt das `Dockerfile` automatisch).
-3. Unter *Variables* setzen:
+3. **Wichtig:** Alle Variablen werden beim **Backend-Service** (deinem Repo-Service) gesetzt,
+   *nicht* beim Postgres-Service. Unter *Backend-Service → Variables*:
    - `JWT_SECRET` = langer Zufallswert
    - `ADMIN_USERNAME`, `ADMIN_PASSWORD` (Erst-Login)
-   - `DATABASE_URL` ist durch das Postgres-Plugin meist schon vorhanden.
+   - `DATABASE_URL` – falls nicht automatisch vorhanden, als Referenz auf den DB-Service anlegen:
+     `${{Postgres.DATABASE_URL}}` (`Postgres` = Name deines PostgreSQL-Services).
+   - `PORT` setzt Railway automatisch (das Dockerfile nutzt ihn).
 4. Deploy abwarten → Railway vergibt eine öffentliche URL
    (z. B. `https://svf-bowling-backend.up.railway.app`). Swagger: `…/swagger`.
 
