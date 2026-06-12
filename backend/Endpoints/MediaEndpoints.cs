@@ -147,7 +147,7 @@ public static class MediaEndpoints
     {
         app.MapGet("/api/downloads", async (AppDbContext db) =>
             Results.Ok(await db.Downloads.OrderBy(d => d.SortOrder).ThenBy(d => d.Title)
-                .Select(d => new { d.Id, d.Title, d.Description, d.FileName, d.ContentType, d.FileSize, d.Category, d.UploadedAt })
+                .Select(d => new { d.Id, d.Title, d.Description, d.FileName, d.ContentType, d.FileSize, d.Category, d.SortOrder, d.UploadedAt })
                 .ToListAsync())).WithTags("Downloads");
 
         app.MapGet("/api/downloads/{id:int}/file", async (int id, AppDbContext db) =>
@@ -176,7 +176,8 @@ public static class MediaEndpoints
                 FileName = Path.GetFileName(file.FileName),
                 ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
                 Data = ms.ToArray(),
-                FileSize = file.Length
+                FileSize = file.Length,
+                SortOrder = ((await db.Downloads.MinAsync(x => (int?)x.SortOrder)) ?? 0) - 1
             };
             db.Downloads.Add(d);
             await db.SaveChangesAsync();
@@ -187,9 +188,9 @@ public static class MediaEndpoints
         {
             var d = await db.Downloads.FindAsync(id);
             if (d is null) return Results.NotFound();
-            if (input.Title is not null) d.Title = input.Title;
-            if (input.Description is not null) d.Description = input.Description;
-            if (input.Category is not null) d.Category = input.Category;
+            if (!string.IsNullOrWhiteSpace(input.Title)) d.Title = input.Title;
+            d.Description = input.Description;
+            d.Category = input.Category;
             if (input.SortOrder is not null) d.SortOrder = input.SortOrder.Value;
             await db.SaveChangesAsync();
             return Results.NoContent();

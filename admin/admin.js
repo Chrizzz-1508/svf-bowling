@@ -326,7 +326,7 @@ function go(key) {
   if (key === "dashboard") return renderDashboard(content);
   if (key === "standings") return renderStandingsSection(content);
   if (key === "images") return renderImagesSection(content);
-  if (key === "downloads") return renderDownloadsSection(content);
+  if (key === "downloads") return renderDownloadsSectionV2(content);
   if (key === "settings") return renderSettings(content);
   return renderResource(content, key);
 }
@@ -451,6 +451,10 @@ async function openForm(key, item) {
   m.querySelector("#cancel").addEventListener("click", closeModal);
   m.querySelector("#save").addEventListener("click", async () => {
     const values = readForm(res.fields, m);
+    if (res.fields.some(f => f.type === "datetime" && values[f.name] === "__INVALID_TIME__")) {
+      toast("Uhrzeit bitte im 24h-Format HH:MM eingeben.", "err");
+      return;
+    }
     if (!validate(res.fields, values)) { toast("Bitte Pflichtfelder ausfüllen.", "err"); return; }
     let payload = res.toPayload ? res.toPayload(values, isEdit) : values;
     // Neue Einträge landen automatisch ganz oben
@@ -518,8 +522,15 @@ function renderField(f, value, isEdit) {
     case "date":
       inner = `<input type="date" id="${id}" name="${f.name}" lang="de-DE" value="${toDateInput(value)}">`; break;
     case "datetime":
-      // lang=de-DE -> 24h-Anzeige im nativen Picker (kein AM/PM)
-      inner = `<input type="datetime-local" id="${id}" name="${f.name}" lang="de-DE" step="60" value="${toLocalInput(value)}">`; break;
+      {
+        const local = toLocalInput(value);
+        const parts = local ? local.split("T") : ["", ""];
+        inner = `<div class="datetime-24">
+          <input type="date" id="${id}" name="${f.name}_date" lang="de-DE" value="${parts[0] || ""}">
+          <input type="text" name="${f.name}_time" inputmode="numeric" placeholder="HH:MM" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" value="${parts[1] || ""}" aria-label="${escapeHtml(f.label)} Uhrzeit im 24h-Format">
+        </div>`;
+        break;
+      }
     case "email":
       inner = `<input type="email" id="${id}" name="${f.name}" value="${escapeHtml(value || "")}" ${locked}>`; break;
     case "select":
@@ -546,6 +557,20 @@ function readForm(fields, m) {
         const ta = m.querySelector(`textarea[name="${f.name}"]`);
         v[f.name] = ta && ta.value !== "" ? ta.value : null;
       }
+      return;
+    }
+    if (f.type === "datetime") {
+      const dateEl = m.querySelector(`[name="${f.name}_date"]`);
+      const timeEl = m.querySelector(`[name="${f.name}_time"]`);
+      const date = dateEl ? dateEl.value : "";
+      const time = timeEl ? timeEl.value.trim() : "";
+      if (!date) { v[f.name] = null; return; }
+      const normalizedTime = time || "00:00";
+      if (!/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(normalizedTime)) {
+        v[f.name] = "__INVALID_TIME__";
+        return;
+      }
+      v[f.name] = `${date}T${normalizedTime}`;
       return;
     }
     const el = m.querySelector(`[name="${f.name}"]`);
@@ -706,6 +731,68 @@ function openDownloadForm() {
     fd.append("description", f.description.value); fd.append("category", f.category.value);
     try { await SVF.send("POST", "/api/admin/downloads", fd, true); closeModal(); toast("Hochgeladen."); go("downloads"); }
     catch (e) { toast(e.message, "err"); }
+  });
+}
+
+async function renderDownloadsSectionV2(content) {
+  try {
+    const dls = await SVF.get("/api/downloads");
+    content.innerHTML = `
+      <div class="toolbar"><button class="btn" id="dl-new">+ Datei hochladen</button>
+        <div class="spacer"></div><span class="muted">${dls.length} Dateien</span></div>
+      ${dls.length > 1 ? `<p class="muted" style="font-size:.85rem">Eintr&auml;ge per Drag&nbsp;&amp;&nbsp;Drop am Griff sortieren.</p>` : ""}
+      ${dls.length ? `<div class="atable-wrap"><table class="atable"><thead><tr><th></th><th>Titel</th><th>Beschreibung</th><th>Datei</th><th>Kategorie</th><th></th></tr></thead><tbody>
+        ${dls.map(d => `<tr data-id="${d.id}"><td class="drag-cell"><span class="drag-handle" title="Ziehen zum Sortieren">::</span></td>
+          <td>${escapeHtml(d.title)}</td><td class="muted">${escapeHtml(d.description || "—")}</td><td class="muted">${escapeHtml(d.fileName)}</td><td>${escapeHtml(d.category || "—")}</td>
+          <td class="actions-cell"><div class="actions"><a class="btn btn-sm btn-neutral" href="${SVF.downloadUrl(d.id)}" target="_blank" rel="noopener">Öffnen</a>
+          <button class="btn btn-sm btn-neutral" data-editdl="${d.id}">Bearbeiten</button>
+          <button class="btn btn-sm btn-danger" data-deldl="${d.id}">Löschen</button></div></td></tr>`).join("")}
+      </tbody></table></div>` : `<div class="empty">Noch keine Downloads.</div>`}`;
+
+    content.querySelector("#dl-new").addEventListener("click", () => openDownloadFormV2());
+    content.querySelectorAll("[data-editdl]").forEach(b => b.addEventListener("click", () =>
+      openDownloadFormV2(dls.find(d => d.id == b.dataset.editdl))));
+    content.querySelectorAll("[data-deldl]").forEach(b => b.addEventListener("click", async () => {
+      if (!confirm("Datei wirklich löschen?")) return;
+      try { await SVF.send("DELETE", `/api/admin/downloads/${b.dataset.deldl}`); toast("Gelöscht."); go("downloads"); }
+      catch (e) { toast(e.message, "err"); }
+    }));
+    initDragSort(content.querySelector(".atable tbody"), "downloads");
+  } catch (e) { content.innerHTML = `<div class="error-box">${escapeHtml(e.message)}</div>`; }
+}
+
+function openDownloadFormV2(download) {
+  const isEdit = !!download;
+  const body = `<form id="dl-form">
+    <div class="field"><label>Titel *</label><input type="text" name="title" required value="${escapeHtml(download?.title || "")}"></div>
+    <div class="field"><label>Beschreibung</label><input type="text" name="description" value="${escapeHtml(download?.description || "")}"></div>
+    <div class="field"><label>Kategorie</label><input type="text" name="category" placeholder="z. B. Trainingsplan" value="${escapeHtml(download?.category || "")}"></div>
+    ${isEdit ? `<p class="muted">Datei: ${escapeHtml(download.fileName || "")}</p>` : `<div class="field"><label>Datei *</label><input type="file" name="file" required></div>`}
+  </form>`;
+  const m = openModal(isEdit ? "Download bearbeiten" : "Datei hochladen", body,
+    `<button class="btn btn-neutral" id="c">Abbrechen</button><button class="btn" id="s">${isEdit ? "Speichern" : "Hochladen"}</button>`);
+  m.querySelector("#c").addEventListener("click", closeModal);
+  m.querySelector("#s").addEventListener("click", async () => {
+    const f = m.querySelector("#dl-form");
+    if (!f.title.value) { toast("Titel ist nötig.", "err"); return; }
+    try {
+      if (isEdit) {
+        await SVF.send("PUT", `/api/admin/downloads/${download.id}`, {
+          title: f.title.value,
+          description: f.description.value || null,
+          category: f.category.value || null
+        });
+      } else {
+        if (!f.file.files[0]) { toast("Titel und Datei sind nötig.", "err"); return; }
+        const fd = new FormData();
+        fd.append("file", f.file.files[0]);
+        fd.append("title", f.title.value);
+        fd.append("description", f.description.value);
+        fd.append("category", f.category.value);
+        await SVF.send("POST", "/api/admin/downloads", fd, true);
+      }
+      closeModal(); toast(isEdit ? "Gespeichert." : "Hochgeladen."); go("downloads");
+    } catch (e) { toast(e.message, "err"); }
   });
 }
 
