@@ -44,6 +44,7 @@ const loadSeasons = () => cached("seasons", () => SVF.get("/api/seasons"));
 const RESOURCES = {
   news: {
     title: "Berichte", singular: "Bericht", base: "/api/admin/news",
+    fetchFull: true, // Liste liefert kein contentHtml -> vor dem Bearbeiten Vollversion laden
     columns: [
       { label: "Titel", render: n => escapeHtml(n.title) },
       { label: "Autor", render: n => escapeHtml(n.author || "—") },
@@ -79,11 +80,11 @@ const RESOURCES = {
       { name: "endDate", label: "Ende (optional)", type: "datetime" },
       { name: "location", label: "Ort", type: "text" },
       { name: "description", label: "Beschreibung", type: "textarea" },
-      { name: "sortOrder", label: "Sortierung", type: "number" },
       { name: "isPublished", label: "Sichtbar", type: "checkbox" }
     ]
   },
   gallery: {
+    reorderEntity: "gallery",
     title: "Galerie-Alben", singular: "Album", base: "/api/admin/gallery",
     columns: [
       { label: "Titel", render: a => escapeHtml(a.title) },
@@ -97,13 +98,13 @@ const RESOURCES = {
       { name: "description", label: "Beschreibung", type: "textarea" },
       { name: "coverImageId", label: "Titelbild", type: "image" },
       { name: "eventDate", label: "Datum des Ereignisses", type: "date" },
-      { name: "sortOrder", label: "Sortierung", type: "number" },
       { name: "isPublished", label: "Sichtbar", type: "checkbox" }
     ]
   },
   downloads: { custom: true },
   teams: {
     title: "Mannschaften", singular: "Mannschaft", base: "/api/admin/teams",
+    reorderEntity: "teams",
     columns: [
       { label: "Name", render: t => escapeHtml(t.name) },
       { label: "Liga", render: t => escapeHtml(t.league || "—") },
@@ -116,12 +117,12 @@ const RESOURCES = {
       { name: "league", label: "Liga", type: "text" },
       { name: "description", label: "Beschreibung", type: "textarea" },
       { name: "photoImageId", label: "Mannschaftsfoto", type: "image" },
-      { name: "sortOrder", label: "Sortierung", type: "number" },
       { name: "isActive", label: "Aktiv", type: "checkbox" }
     ]
   },
   players: {
     title: "Spieler", singular: "Spieler", base: "/api/admin/players",
+    reorderEntity: "players",
     columns: [
       { label: "Name", render: p => escapeHtml(p.firstName + " " + p.lastName) },
       { label: "Mannschaft", render: p => escapeHtml(teamName(p.teamId)) },
@@ -133,12 +134,12 @@ const RESOURCES = {
       { name: "lastName", label: "Nachname", type: "text", required: true },
       { name: "teamId", label: "Mannschaft", type: "select", optionsFrom: async () => opt(await loadTeams(), "name") },
       { name: "role", label: "Rolle (optional)", type: "text", hint: "z. B. Mannschaftsführer" },
-      { name: "sortOrder", label: "Sortierung", type: "number" },
       { name: "isActive", label: "Aktiv", type: "checkbox" }
     ]
   },
   seasons: {
     title: "Saisons", singular: "Saison", base: "/api/admin/seasons",
+    reorderEntity: "seasons",
     columns: [
       { label: "Name", render: s => escapeHtml(s.name) },
       { label: "Aktuell", render: s => tag(s.isCurrent, "Aktuell", "—") }
@@ -148,17 +149,16 @@ const RESOURCES = {
       { name: "name", label: "Name", type: "text", required: true, hint: "z. B. 2025/26" },
       { name: "startDate", label: "Beginn", type: "date" },
       { name: "endDate", label: "Ende", type: "date" },
-      { name: "sortOrder", label: "Sortierung", type: "number" },
       { name: "isCurrent", label: "Als aktuelle Saison markieren", type: "checkbox" }
     ]
   },
   categories: {
     title: "Kategorien", singular: "Kategorie", base: "/api/admin/categories",
+    reorderEntity: "categories",
     columns: [{ label: "Name", render: c => escapeHtml(c.name) }],
     onSaved: () => clearCache("categories"),
     fields: [
-      { name: "name", label: "Name", type: "text", required: true },
-      { name: "sortOrder", label: "Sortierung", type: "number" }
+      { name: "name", label: "Name", type: "text", required: true }
     ]
   },
   pages: {
@@ -332,6 +332,7 @@ async function renderResource(content, key) {
   if (key === "players") await loadTeams();
   try {
     const items = await SVF.get(res.base);
+    state.currentItems = items;
     content.innerHTML = `
       <div class="toolbar">
         <button class="btn" id="new-btn">+ Neue${res.singular.endsWith("e") ? "" : "r"} ${escapeHtml(res.singular)}</button>
@@ -339,23 +340,62 @@ async function renderResource(content, key) {
         <span class="muted">${items.length} Einträge</span>
       </div>
       ${res.note ? `<p class="muted">${escapeHtml(res.note)}</p>` : ""}
+      ${res.reorderEntity && items.length > 1 ? `<p class="muted" style="font-size:.85rem">↕ Einträge per Drag&nbsp;&amp;&nbsp;Drop am Griff sortieren.</p>` : ""}
       ${items.length ? renderTable(res, items) : `<div class="empty">Noch keine Einträge. Lege den ersten an.</div>`}`;
     document.getElementById("new-btn").addEventListener("click", () => openForm(key, null));
     bindRowActions(content, key, items);
+    if (res.reorderEntity) initDragSort(content.querySelector(".atable tbody"), res.reorderEntity, res.onSaved);
   } catch (e) { content.innerHTML = `<div class="error-box">${escapeHtml(e.message)}</div>`; }
 }
 
 function renderTable(res, items) {
+  const drag = !!res.reorderEntity;
   return `<table class="atable"><thead><tr>
-      ${res.columns.map(c => `<th>${escapeHtml(c.label)}</th>`).join("")}<th></th>
+      ${drag ? "<th></th>" : ""}${res.columns.map(c => `<th>${escapeHtml(c.label)}</th>`).join("")}<th></th>
     </tr></thead><tbody>
-      ${items.map(it => `<tr>
+      ${items.map(it => `<tr data-id="${it.id}">
+        ${drag ? `<td class="drag-cell"><span class="drag-handle" title="Ziehen zum Sortieren">⠿</span></td>` : ""}
         ${res.columns.map(c => `<td>${c.render(it)}</td>`).join("")}
-        <td class="actions">
+        <td class="actions-cell"><div class="actions">
           <button class="btn btn-sm btn-neutral" data-edit="${it.id}">Bearbeiten</button>
           <button class="btn btn-sm btn-danger" data-del="${it.id}">Löschen</button>
-        </td></tr>`).join("")}
+        </div></td></tr>`).join("")}
     </tbody></table>`;
+}
+
+// ---- Drag & Drop Sortierung ----
+function initDragSort(tbody, entity, onDone) {
+  if (!tbody) return;
+  let dragEl = null;
+  tbody.querySelectorAll("tr[data-id]").forEach(tr => {
+    const handle = tr.querySelector(".drag-handle");
+    if (!handle) return;
+    handle.addEventListener("mousedown", () => { tr.draggable = true; });
+    handle.addEventListener("touchstart", () => { tr.draggable = true; }, { passive: true });
+    tr.addEventListener("dragstart", e => {
+      dragEl = tr; tr.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      try { e.dataTransfer.setData("text/plain", tr.dataset.id); } catch { /* */ }
+    });
+    tr.addEventListener("dragover", e => {
+      e.preventDefault();
+      if (!dragEl || dragEl === tr) return;
+      const rect = tr.getBoundingClientRect();
+      const after = (e.clientY - rect.top) > rect.height / 2;
+      tr.parentNode.insertBefore(dragEl, after ? tr.nextSibling : tr);
+    });
+    tr.addEventListener("dragend", async () => {
+      tr.classList.remove("dragging"); tr.draggable = false;
+      if (!dragEl) return;
+      dragEl = null;
+      const ids = [...tbody.querySelectorAll("tr[data-id]")].map(r => Number(r.dataset.id));
+      try {
+        await SVF.send("POST", "/api/admin/reorder", { entity, orderedIds: ids });
+        toast("Reihenfolge gespeichert.");
+        if (onDone) onDone();
+      } catch (err) { toast(err.message, "err"); }
+    });
+  });
 }
 
 function bindRowActions(content, key, items) {
@@ -379,6 +419,12 @@ async function deleteItem(key, id) {
 async function openForm(key, item) {
   const res = RESOURCES[key];
   const isEdit = !!item;
+
+  // Manche Listen liefern nur eine Kurzfassung -> Vollversion nachladen (z. B. News-Inhalt)
+  if (isEdit && res.fetchFull) {
+    try { item = await SVF.get(`${res.base}/${item.id}`); }
+    catch (e) { toast(e.message, "err"); return; }
+  }
   const data = Object.assign({}, res.defaults || {}, item || {});
 
   // Optionen für Selects vorab laden
@@ -387,21 +433,62 @@ async function openForm(key, item) {
     if (f.type === "select" && f.options) f._opts = f.options;
   }
 
+  const hasHtmlField = res.fields.some(f => f.type === "html");
   const body = `<form id="entity-form">${res.fields.map(f => renderField(f, data[f.name], isEdit)).join("")}</form>`;
   const foot = `<button class="btn btn-neutral" id="cancel">Abbrechen</button><button class="btn" id="save">Speichern</button>`;
-  const m = openModal(`${isEdit ? res.singular + " bearbeiten" : "Neue" + (res.singular.endsWith("e") ? "" : "r") + " " + res.singular}`, body, foot);
+  const m = openModal(`${isEdit ? res.singular + " bearbeiten" : "Neue" + (res.singular.endsWith("e") ? "" : "r") + " " + res.singular}`,
+    body, foot, hasHtmlField);
   initImageFields(m);
+  initRichEditors(m, res.fields, data);
   m.querySelector("#cancel").addEventListener("click", closeModal);
   m.querySelector("#save").addEventListener("click", async () => {
     const values = readForm(res.fields, m);
     if (!validate(res.fields, values)) { toast("Bitte Pflichtfelder ausfüllen.", "err"); return; }
     let payload = res.toPayload ? res.toPayload(values, isEdit) : values;
+    // Neue Einträge landen automatisch ganz oben
+    if (!isEdit && res.reorderEntity) {
+      const sorts = (state.currentItems || []).map(i => i.sortOrder ?? 0);
+      payload.sortOrder = (sorts.length ? Math.min(...sorts) : 0) - 1;
+    }
     try {
       if (isEdit) await SVF.send("PUT", `${res.base}/${item.id}`, payload);
       else await SVF.send("POST", res.base, payload);
       if (res.onSaved) res.onSaved();
       closeModal(); toast("Gespeichert."); go(state.section);
     } catch (e) { toast(e.message, "err"); }
+  });
+}
+
+// ---------------------------------------------------------------------------
+//  Rich-Text-Editor (Quill) für "html"-Felder – kein HTML-Wissen nötig
+// ---------------------------------------------------------------------------
+const _quills = {};
+function initRichEditors(m, fields, data) {
+  fields.filter(f => f.type === "html").forEach(f => {
+    const host = m.querySelector(`[data-rte="${f.name}"]`);
+    if (!host) return;
+    if (typeof Quill === "undefined") {
+      // Fallback ohne Internet: einfaches Textfeld
+      host.outerHTML = `<textarea name="${f.name}" style="min-height:200px;width:100%">${escapeHtml(data[f.name] || "")}</textarea>`;
+      return;
+    }
+    const q = new Quill(host, {
+      theme: "snow",
+      placeholder: "Hier schreiben…",
+      modules: {
+        toolbar: [
+          [{ header: [2, 3, false] }],
+          ["bold", "italic", "underline", "strike"],
+          [{ color: [] }, { background: [] }],
+          [{ list: "ordered" }, { list: "bullet" }],
+          [{ align: [] }],
+          ["link", "blockquote"],
+          ["clean"]
+        ]
+      }
+    });
+    if (data[f.name]) q.clipboard.dangerouslyPasteHTML(data[f.name]);
+    _quills[f.name] = q;
   });
 }
 
@@ -414,7 +501,8 @@ function renderField(f, value, isEdit) {
     case "textarea":
       inner = `<textarea id="${id}" name="${f.name}" style="min-height:90px">${escapeHtml(value || "")}</textarea>`; break;
     case "html":
-      inner = `<textarea id="${id}" name="${f.name}" style="min-height:200px;font-family:monospace">${escapeHtml(value || "")}</textarea>`; break;
+      // Quill-Editor-Host – Inhalt wird in initRichEditors gesetzt und beim Speichern ausgelesen
+      inner = `<div class="rte-host" data-rte="${f.name}"></div>`; break;
     case "number":
       inner = `<input type="number" id="${id}" name="${f.name}" value="${value ?? ""}">`; break;
     case "checkbox":
@@ -439,6 +527,18 @@ function renderField(f, value, isEdit) {
 function readForm(fields, m) {
   const v = {};
   fields.forEach(f => {
+    if (f.type === "html") {
+      // Quill-Inhalt auslesen (oder Fallback-Textarea)
+      const q = _quills[f.name];
+      if (q) {
+        const html = q.root.innerHTML;
+        v[f.name] = (q.getText().trim() === "" && !html.includes("<img")) ? null : html;
+      } else {
+        const ta = m.querySelector(`textarea[name="${f.name}"]`);
+        v[f.name] = ta && ta.value !== "" ? ta.value : null;
+      }
+      return;
+    }
     const el = m.querySelector(`[name="${f.name}"]`);
     if (!el) return;
     switch (f.type) {
