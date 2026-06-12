@@ -32,7 +32,7 @@ public static class StandingsEndpoints
         pub.MapGet("/{id:int}", async (int id, AppDbContext db) =>
         {
             var t = await db.StandingsTables
-                .Include(x => x.Rows.OrderBy(r => r.SortOrder).ThenBy(r => r.Position))
+                .Include(x => x.Rows.OrderBy(r => r.SortOrder))
                 .FirstOrDefaultAsync(x => x.Id == id && x.IsPublished);
             return t is null ? Results.NotFound() : Results.Ok(t);
         });
@@ -53,7 +53,7 @@ public static class StandingsEndpoints
         admin.MapGet("/{id:int}", async (int id, AppDbContext db) =>
         {
             var t = await db.StandingsTables
-                .Include(x => x.Rows.OrderBy(r => r.SortOrder).ThenBy(r => r.Position))
+                .Include(x => x.Rows.OrderBy(r => r.SortOrder))
                 .FirstOrDefaultAsync(x => x.Id == id);
             return t is null ? Results.NotFound() : Results.Ok(t);
         });

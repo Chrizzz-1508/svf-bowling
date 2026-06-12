@@ -43,7 +43,7 @@ const loadSeasons = () => cached("seasons", () => SVF.get("/api/seasons"));
 // ---------------------------------------------------------------------------
 const RESOURCES = {
   news: {
-    title: "Berichte", singular: "Bericht", base: "/api/admin/news",
+    title: "Berichte", singular: "Bericht", newLabel: "Neuer Bericht", base: "/api/admin/news",
     fetchFull: true, // Liste liefert kein contentHtml -> vor dem Bearbeiten Vollversion laden
     columns: [
       { label: "Titel", render: n => escapeHtml(n.title) },
@@ -66,7 +66,7 @@ const RESOURCES = {
     ]
   },
   events: {
-    title: "Termine", singular: "Termin", base: "/api/admin/events",
+    title: "Termine", singular: "Termin", newLabel: "Neuer Termin", base: "/api/admin/events",
     columns: [
       { label: "Titel", render: e => escapeHtml(e.title) },
       { label: "Beginn", render: e => formatDate(e.startDate, true) },
@@ -85,7 +85,7 @@ const RESOURCES = {
   },
   gallery: {
     reorderEntity: "gallery",
-    title: "Galerie-Alben", singular: "Album", base: "/api/admin/gallery",
+    title: "Galerie-Alben", singular: "Album", newLabel: "Neues Album", base: "/api/admin/gallery",
     columns: [
       { label: "Titel", render: a => escapeHtml(a.title) },
       { label: "Datum", render: a => formatDate(a.eventDate) },
@@ -103,7 +103,7 @@ const RESOURCES = {
   },
   downloads: { custom: true },
   teams: {
-    title: "Mannschaften", singular: "Mannschaft", base: "/api/admin/teams",
+    title: "Mannschaften", singular: "Mannschaft", newLabel: "Neue Mannschaft", base: "/api/admin/teams",
     reorderEntity: "teams",
     columns: [
       { label: "Name", render: t => escapeHtml(t.name) },
@@ -121,7 +121,7 @@ const RESOURCES = {
     ]
   },
   players: {
-    title: "Spieler", singular: "Spieler", base: "/api/admin/players",
+    title: "Spieler", singular: "Spieler", newLabel: "Neuer Spieler", base: "/api/admin/players",
     reorderEntity: "players",
     columns: [
       { label: "Name", render: p => escapeHtml(p.firstName + " " + p.lastName) },
@@ -138,7 +138,7 @@ const RESOURCES = {
     ]
   },
   seasons: {
-    title: "Saisons", singular: "Saison", base: "/api/admin/seasons",
+    title: "Saisons", singular: "Saison", newLabel: "Neue Saison", base: "/api/admin/seasons",
     reorderEntity: "seasons",
     columns: [
       { label: "Name", render: s => escapeHtml(s.name) },
@@ -153,7 +153,7 @@ const RESOURCES = {
     ]
   },
   categories: {
-    title: "Kategorien", singular: "Kategorie", base: "/api/admin/categories",
+    title: "Kategorien", singular: "Kategorie", newLabel: "Neue Kategorie", base: "/api/admin/categories",
     reorderEntity: "categories",
     columns: [{ label: "Name", render: c => escapeHtml(c.name) }],
     onSaved: () => clearCache("categories"),
@@ -162,7 +162,7 @@ const RESOURCES = {
     ]
   },
   pages: {
-    title: "Seiten", singular: "Seite", base: "/api/admin/pages",
+    title: "Seiten", singular: "Seite", newLabel: "Neue Seite", base: "/api/admin/pages",
     columns: [
       { label: "Titel", render: p => escapeHtml(p.title) },
       { label: "Slug", render: p => escapeHtml(p.slug) },
@@ -175,7 +175,7 @@ const RESOURCES = {
     ]
   },
   users: {
-    title: "Benutzer", singular: "Benutzer", base: "/api/admin/users",
+    title: "Benutzer", singular: "Benutzer", newLabel: "Neuer Benutzer", base: "/api/admin/users",
     columns: [
       { label: "Benutzername", render: u => escapeHtml(u.username) },
       { label: "E-Mail", render: u => escapeHtml(u.email || "—") },
@@ -202,6 +202,7 @@ const RESOURCES = {
 function tag(on, yes, no) { return `<span class="tag ${on ? "on" : "off"}">${escapeHtml(on ? yes : no)}</span>`; }
 function opt(list, labelKey) { return [{ value: "", label: "– keine –" }].concat(list.map(x => ({ value: x.id, label: x[labelKey] }))); }
 function teamName(id) { const t = (state.cache.teams || []).find(x => x.id === id); return t ? t.name : "—"; }
+function newEntityLabel(res) { return res.newLabel || `Neue ${res.singular}`; }
 function toLocalInput(iso) { if (!iso) return ""; const d = new Date(iso); if (isNaN(d)) return ""; const p = n => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; }
 function toDateInput(iso) { return iso ? toLocalInput(iso).slice(0, 10) : ""; }
 
@@ -335,7 +336,7 @@ async function renderResource(content, key) {
     state.currentItems = items;
     content.innerHTML = `
       <div class="toolbar">
-        <button class="btn" id="new-btn">+ Neue${res.singular.endsWith("e") ? "" : "r"} ${escapeHtml(res.singular)}</button>
+        <button class="btn" id="new-btn">+ ${escapeHtml(newEntityLabel(res))}</button>
         <div class="spacer"></div>
         <span class="muted">${items.length} Einträge</span>
       </div>
@@ -436,7 +437,7 @@ async function openForm(key, item) {
   const hasHtmlField = res.fields.some(f => f.type === "html");
   const body = `<form id="entity-form">${res.fields.map(f => renderField(f, data[f.name], isEdit)).join("")}</form>`;
   const foot = `<button class="btn btn-neutral" id="cancel">Abbrechen</button><button class="btn" id="save">Speichern</button>`;
-  const m = openModal(`${isEdit ? res.singular + " bearbeiten" : "Neue" + (res.singular.endsWith("e") ? "" : "r") + " " + res.singular}`,
+  const m = openModal(`${isEdit ? res.singular + " bearbeiten" : newEntityLabel(res)}`,
     body, foot, hasHtmlField);
   initImageFields(m);
   initRichEditors(m, res.fields, data);

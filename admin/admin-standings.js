@@ -80,7 +80,7 @@ async function openStandingsEditor(table, seasons) {
     <div class="col-editor" id="cols"></div>
     <button type="button" class="btn btn-sm btn-neutral" id="add-col">+ Spalte</button>
 
-    <div style="margin:1.2rem 0 .4rem"><strong>Zeilen / Platzierungen</strong></div>
+    <div style="margin:1.2rem 0 .4rem"><strong>Zeilen</strong></div>
     <div style="overflow-x:auto"><table class="rows-table" id="rows"></table></div>
     <button type="button" class="btn btn-sm btn-neutral" id="add-row" style="margin-top:.6rem">+ Zeile</button>`;
 
@@ -98,6 +98,36 @@ async function openStandingsEditor(table, seasons) {
       return { values };
     });
   }
+  function initRowDrag() {
+    let dragEl = null;
+    rowsTable.querySelectorAll("tbody tr").forEach(tr => {
+      const handle = tr.querySelector(".row-drag-handle");
+      if (!handle) return;
+      handle.addEventListener("mousedown", () => { tr.draggable = true; });
+      handle.addEventListener("touchstart", () => { tr.draggable = true; }, { passive: true });
+      tr.addEventListener("dragstart", e => {
+        dragEl = tr;
+        tr.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        try { e.dataTransfer.setData("text/plain", "row"); } catch { /* */ }
+      });
+      tr.addEventListener("dragover", e => {
+        e.preventDefault();
+        if (!dragEl || dragEl === tr) return;
+        const rect = tr.getBoundingClientRect();
+        const after = (e.clientY - rect.top) > rect.height / 2;
+        tr.parentNode.insertBefore(dragEl, after ? tr.nextSibling : tr);
+      });
+      tr.addEventListener("dragend", () => {
+        tr.classList.remove("dragging");
+        tr.draggable = false;
+        if (!dragEl) return;
+        dragEl = null;
+        syncRowsFromDom();
+        renderRows();
+      });
+    });
+  }
   function renderCols() {
     colsBox.innerHTML = cols.map((c, i) =>
       `<span class="col-chip"><input value="${escapeHtml(c.label)}" data-coli="${i}"><button type="button" class="x" data-rmcol="${i}">×</button></span>`).join("");
@@ -113,12 +143,13 @@ async function openStandingsEditor(table, seasons) {
     }));
   }
   function renderRows() {
-    const head = `<thead><tr><th class="rownum">#</th>${cols.map(c => `<th>${escapeHtml(c.label)}</th>`).join("")}<th></th></tr></thead>`;
-    const bdy = `<tbody>${rows.map((r, i) => `<tr><td class="rownum">${i + 1}</td>${cols.map(c =>
+    const head = `<thead><tr><th class="drag-cell"></th><th class="rownum">#</th>${cols.map(c => `<th>${escapeHtml(c.label)}</th>`).join("")}<th></th></tr></thead>`;
+    const bdy = `<tbody>${rows.map((r, i) => `<tr><td class="drag-cell"><span class="drag-handle row-drag-handle" title="Ziehen zum Sortieren">⠿</span></td><td class="rownum">${i + 1}</td>${cols.map(c =>
       `<td><input data-key="${c.key}" value="${escapeHtml(r.values[c.key] ?? "")}"></td>`).join("")}
       <td class="rownum"><button type="button" class="x" data-rmrow="${i}" style="background:none;border:0;cursor:pointer;color:var(--color-danger)">×</button></td></tr>`).join("")}</tbody>`;
     rowsTable.innerHTML = head + bdy;
     rowsTable.querySelectorAll("[data-rmrow]").forEach(b => b.addEventListener("click", () => { syncRowsFromDom(); rows.splice(b.dataset.rmrow, 1); renderRows(); }));
+    initRowDrag();
   }
 
   m.querySelector("#add-col").addEventListener("click", () => {
@@ -128,7 +159,7 @@ async function openStandingsEditor(table, seasons) {
     cols.push({ key: slugKey(label), label, type: "text" });
     renderCols(); renderRows();
   });
-  m.querySelector("#add-row").addEventListener("click", () => { syncRowsFromDom(); rows.push({ values: {} }); renderRows(); });
+  m.querySelector("#add-row").addEventListener("click", () => { syncRowsFromDom(); rows.unshift({ values: {} }); renderRows(); });
   m.querySelector("#load-preset").addEventListener("click", async () => {
     const type = m.querySelector("#st-type").value;
     const presets = await loadPresets();
@@ -146,7 +177,7 @@ async function openStandingsEditor(table, seasons) {
     const title = m.querySelector("#st-title").value.trim();
     if (!title) { toast("Bitte einen Titel angeben.", "err"); return; }
     if (!cols.length) { toast("Mindestens eine Spalte anlegen.", "err"); return; }
-    // Bestehende Tabellen behalten ihre Position; neue landen ganz oben
+    // Bestehende Tabellen behalten ihre Reihenfolge; neue landen ganz oben
     let sortOrder;
     if (isEdit) {
       sortOrder = table.sortOrder || 0;
@@ -163,7 +194,7 @@ async function openStandingsEditor(table, seasons) {
       sortOrder,
       isPublished: m.querySelector("#st-pub").checked,
       columnsJson: JSON.stringify(cols.map(c => ({ key: c.key, label: c.label, type: c.type || "text" }))),
-      rows: rows.map((r, i) => ({ position: i + 1, sortOrder: i, valuesJson: JSON.stringify(r.values || {}) }))
+      rows: rows.map((r, i) => ({ sortOrder: i, valuesJson: JSON.stringify(r.values || {}) }))
     };
     try {
       if (isEdit) await SVF.send("PUT", `/api/admin/standings/${table.id}`, payload);

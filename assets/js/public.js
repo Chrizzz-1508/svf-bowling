@@ -14,12 +14,23 @@ function showError(elId, msg) {
   if (e) e.innerHTML = `<div class="error-box">${escapeHtml(msg)}<br><small>Läuft das Backend? API: ${escapeHtml(SVF.apiBase())}</small></div>`;
 }
 
+const PLACEHOLDER_IMAGES = {
+  news: "assets/img/news.png",
+  teams: "assets/img/mannschaften.png",
+  gallery: "assets/img/galerie.png"
+};
+
+function placeholderImage(kind, alt = "") {
+  const src = PLACEHOLDER_IMAGES[kind] || PLACEHOLDER_IMAGES.news;
+  return `<img src="${src}" alt="${escapeHtml(alt)}" loading="lazy">`;
+}
+
 // ---- News-Karte ----
 function newsCard(n) {
   const img = SVF.imageUrl(n.titleImageId);
   const thumb = img
     ? `<a href="artikel.html?slug=${encodeURIComponent(n.slug)}" class="thumb" style="background-image:url('${img}')"></a>`
-    : `<a href="artikel.html?slug=${encodeURIComponent(n.slug)}" class="thumb placeholder">${LOGO_SVG}</a>`;
+    : `<a href="artikel.html?slug=${encodeURIComponent(n.slug)}" class="thumb placeholder">${placeholderImage("news", "Bericht")}</a>`;
   return `<article class="card">
     ${thumb}
     <div class="card-body">
@@ -386,7 +397,7 @@ const PAGES = {
       document.getElementById(box).innerHTML = teams.map(t => {
         const img = SVF.imageUrl(t.photoImageId);
         return `<article class="card">
-          ${img ? `<div class="thumb" style="background-image:url('${img}')"></div>` : `<div class="thumb placeholder">${LOGO_SVG}</div>`}
+          ${img ? `<div class="thumb" style="background-image:url('${img}')"></div>` : `<div class="thumb placeholder">${placeholderImage("teams", "Mannschaft")}</div>`}
           <div class="card-body">
             ${t.league ? `<span class="badge">${escapeHtml(t.league)}</span>` : ""}
             <h3>${escapeHtml(t.name)}</h3>
@@ -421,7 +432,7 @@ const PAGES = {
       document.getElementById(box).innerHTML = `<div class="grid grid-3">` + albums.map(a => {
         const img = SVF.imageUrl(a.coverImageId);
         return `<a class="card" href="galerie.html?album=${a.id}" style="text-decoration:none;color:inherit">
-          ${img ? `<div class="thumb" style="background-image:url('${img}')"></div>` : `<div class="thumb placeholder">${LOGO_SVG}</div>`}
+          ${img ? `<div class="thumb" style="background-image:url('${img}')"></div>` : `<div class="thumb placeholder">${placeholderImage("gallery", "Galerie")}</div>`}
           <div class="card-body">
             <h3>${escapeHtml(a.title)}</h3>
             <div class="meta">${a.eventDate ? formatDate(a.eventDate) + " · " : ""}${a.imageCount} Bild(er)</div>
