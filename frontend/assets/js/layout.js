@@ -39,6 +39,10 @@ function renderChrome() {
       </button>
       <nav class="nav-links">
         ${NAV_ITEMS.map(i => `<a href="${i.href}" class="${i.key === active ? "active" : ""}">${i.label}</a>`).join("")}
+        <a href="suche.html" class="nav-search ${active === "suche" ? "active" : ""}" aria-label="Suche" title="Suche">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+          <span class="search-label">Suche</span>
+        </a>
         <a class="btn btn-sm nav-cta" href="admin/">Login</a>
       </nav>
     </div>`;
@@ -91,6 +95,11 @@ async function loadSettingsIntoChrome(header, footer) {
   try {
     const s = await SVF.get("/api/settings");
     if (!s) return;
+    // Hochgeladenes Logo aus den Einstellungen ersetzt das eingebaute SVG
+    if (s.logoImageId) {
+      const svg = header.querySelector(".brand .logo");
+      if (svg) svg.outerHTML = `<img class="logo" src="${SVF.imageUrl(s.logoImageId)}" alt="Vereinslogo" style="object-fit:contain;border-radius:8px">`;
+    }
     if (s.clubName) {
       const span = header.querySelector(".brand span");
       span.childNodes[0].nodeValue = s.clubName.split("–")[0].trim() || "SV Fellbach";

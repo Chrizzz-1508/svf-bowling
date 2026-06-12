@@ -59,6 +59,30 @@ async function getStandingsFull(id) {
   return standingsCache[id];
 }
 
+// ---- Sortierbare Tabellen: Klick auf Spaltenkopf sortiert (Zahlen-bewusst) ----
+document.addEventListener("click", e => {
+  const th = e.target.closest("table.data thead th");
+  if (!th) return;
+  const table = th.closest("table");
+  const tbody = table.querySelector("tbody");
+  const idx = [...th.parentNode.children].indexOf(th);
+  const dir = th.dataset.sort === "asc" ? -1 : 1;
+  table.querySelectorAll("thead th").forEach(h => { h.dataset.sort = ""; h.classList.remove("sort-asc", "sort-desc"); });
+  th.dataset.sort = dir === 1 ? "asc" : "desc";
+  th.classList.add(dir === 1 ? "sort-asc" : "sort-desc");
+
+  const num = s => parseFloat(String(s).replace(/\./g, "").replace(",", "."));
+  const rows = [...tbody.querySelectorAll("tr")];
+  rows.sort((a, b) => {
+    const av = a.children[idx]?.textContent.trim() ?? "";
+    const bv = b.children[idx]?.textContent.trim() ?? "";
+    const an = num(av), bn = num(bv);
+    if (!isNaN(an) && !isNaN(bn)) return (an - bn) * dir;
+    return av.localeCompare(bv, "de-DE", { numeric: true }) * dir;
+  });
+  rows.forEach(r => tbody.appendChild(r));
+});
+
 const RESULT_TYPE_DEFS = [
   { key: "Liga", label: "Liga", entryLabel: "Tabelle" },
   { key: "Monatspokal", label: "Monatspokal", entryLabel: "Monat" },
@@ -102,6 +126,11 @@ const PAGES = {
         const p = document.getElementById("hero-text");
         if (h && s.tagline) h.textContent = s.tagline;
         if (p && s.welcomeText) p.textContent = s.welcomeText;
+        // Headerbild aus den Einstellungen ersetzt die Hero-Grafik
+        const art = document.getElementById("hero-art");
+        if (art && s.headerImageId) {
+          art.innerHTML = `<img src="${SVF.imageUrl(s.headerImageId)}" alt="" style="border-radius:var(--radius);max-height:280px;object-fit:cover">`;
+        }
       }
 
       loading("home-news");
@@ -109,12 +138,11 @@ const PAGES = {
       document.getElementById("home-news").innerHTML =
         news.length ? news.map(newsCard).join("") : `<div class="empty">Noch keine Berichte.</div>`;
 
-      // Aktuelle Liga-Tabelle
-      const seasons = await SVF.get("/api/seasons");
-      const current = seasons.find(x => x.isCurrent) || seasons[0];
-      const tables = await SVF.get(`/api/standings?type=Liga${current ? "&seasonId=" + current.id : ""}`);
+      // Zuletzt aktualisierte Liga-Tabelle (aktuellster Stand zuerst)
+      const tables = await SVF.get("/api/standings?type=Liga");
       const box = document.getElementById("home-standings");
       if (tables.length) {
+        tables.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
         const full = await getStandingsFull(tables[0].id);
         box.innerHTML = renderStandings(full);
       } else {
@@ -136,7 +164,14 @@ const PAGES = {
   async news() {
     const filterBox = document.getElementById("news-filter");
     const listEl = document.getElementById("news-list");
-    const moreWrap = document.getElementById("news-more");
+    // Robust: Container für "Mehr laden" bei Bedarf selbst anlegen
+    let moreWrap = document.getElementById("news-more");
+    if (!moreWrap && listEl) {
+      moreWrap = document.createElement("div");
+      moreWrap.className = "load-more-wrap";
+      moreWrap.id = "news-more";
+      listEl.insertAdjacentElement("afterend", moreWrap);
+    }
     const PAGE = 12;
     let categories = [];
     try { categories = await SVF.get("/api/categories"); } catch { /* */ }
@@ -191,7 +226,9 @@ const PAGES = {
     try {
       const n = await SVF.get("/api/news/" + encodeURIComponent(slug));
       document.title = n.title + " – SV Fellbach Bowling";
-      const img = SVF.imageUrl(n.titleImageId);
+      // Titelbild nur zeigen, wenn es nicht ohnehin schon im Artikeltext vorkommt (sonst doppelt)
+      let img = SVF.imageUrl(n.titleImageId);
+      if (img && n.titleImageId && (n.contentHtml || "").includes(`/api/images/${n.titleImageId}`)) img = null;
       box.innerHTML = `
         <a href="news.html" class="muted">← Zurück zu den Berichten</a>
         <h1 style="margin-top:.6rem">${escapeHtml(n.title)}</h1>
@@ -451,6 +488,69 @@ const PAGES = {
     } catch (e) { showError(box, e.message); }
   },
 
+  // -------------------- Suche --------------------
+  async suche() {
+    const form = document.getElementById("search-form");
+    const input = document.getElementById("search-input");
+    const box = document.getElementById("search-results");
+    let seasons = [];
+    try { seasons = await SVF.get("/api/seasons"); } catch { /* */ }
+    const seasonName = id => (seasons.find(s => s.id === id) || {}).name || "";
+
+    async function run(q) {
+      if (!q || q.trim().length < 2) { box.innerHTML = `<div class="empty">Bitte mindestens 2 Zeichen eingeben.</div>`; return; }
+      history.replaceState(null, "", `?q=${encodeURIComponent(q)}`);
+      box.innerHTML = `<div class="loader"><div class="spinner"></div>Suche…</div>`;
+      try {
+        const r = await SVF.get("/api/search?q=" + encodeURIComponent(q));
+        const total = r.news.length + r.events.length + r.standings.length + r.pages.length + r.teams.length;
+        if (!total) { box.innerHTML = `<div class="empty">Keine Treffer für „${escapeHtml(q)}“.</div>`; return; }
+
+        let html = `<p class="muted">${total} Treffer für „${escapeHtml(q)}“</p>`;
+        if (r.news.length) {
+          html += `<h3 class="search-group">Berichte</h3>` + r.news.map(n => `
+            <a class="search-hit" href="artikel.html?slug=${encodeURIComponent(n.slug)}">
+              <strong>${escapeHtml(n.title)}</strong>
+              <span class="meta">${n.author ? escapeHtml(n.author) + " · " : ""}${formatDate(n.publishedAt)}</span>
+              ${n.excerpt ? `<span class="muted">${escapeHtml(n.excerpt.slice(0, 140))}…</span>` : ""}
+            </a>`).join("");
+        }
+        if (r.events.length) {
+          html += `<h3 class="search-group">Termine</h3>` + r.events.map(e => `
+            <a class="search-hit" href="termine.html">
+              <strong>${escapeHtml(e.title)}</strong>
+              <span class="meta">${formatDate(e.startDate)}${e.location ? " · " + escapeHtml(e.location) : ""}</span>
+            </a>`).join("");
+        }
+        if (r.standings.length) {
+          html += `<h3 class="search-group">Ergebnis-Tabellen</h3>` + r.standings.map(t => `
+            <a class="search-hit" href="ergebnisse.html?type=${encodeURIComponent(t.type)}&season=${t.seasonId ?? ""}&table=${t.id}">
+              <strong>${escapeHtml(t.title)}</strong>
+              <span class="meta">${escapeHtml(t.type)}${t.seasonId ? " · Saison " + escapeHtml(seasonName(t.seasonId)) : ""}</span>
+            </a>`).join("");
+        }
+        if (r.teams.length) {
+          html += `<h3 class="search-group">Mannschaften</h3>` + r.teams.map(t => `
+            <a class="search-hit" href="mannschaften.html">
+              <strong>${escapeHtml(t.name)}</strong><span class="meta">${escapeHtml(t.league || "")}</span>
+            </a>`).join("");
+        }
+        if (r.pages.length) {
+          html += `<h3 class="search-group">Seiten</h3>` + r.pages.map(p => {
+            const known = ["impressum", "datenschutz", "verein"].includes(p.slug);
+            return `<a class="search-hit" href="${known ? p.slug + ".html" : "verein.html"}">
+              <strong>${escapeHtml(p.title)}</strong></a>`;
+          }).join("");
+        }
+        box.innerHTML = html;
+      } catch (e) { box.innerHTML = `<div class="error-box">${escapeHtml(e.message)}</div>`; }
+    }
+
+    form.addEventListener("submit", e => { e.preventDefault(); run(input.value); });
+    const initial = qs("q");
+    if (initial) { input.value = initial; run(initial); }
+  },
+
   // -------------------- Statische Seite --------------------
   async page() {
     const slug = document.body.dataset.slug;
@@ -471,10 +571,11 @@ function eventRow(e) {
   const d = new Date(e.startDate);
   const day = isNaN(d) ? "–" : d.getDate();
   const mon = isNaN(d) ? "" : d.toLocaleDateString("de-DE", { month: "short" });
+  const wd = isNaN(d) ? "" : d.toLocaleDateString("de-DE", { weekday: "short" });
   const range = e.endDate && e.endDate !== e.startDate
     ? `${formatDate(e.startDate)} – ${formatDate(e.endDate)}` : formatDate(e.startDate);
   return `<div class="event">
-    <div class="date-chip"><div class="d">${day}</div><div class="m">${escapeHtml(mon)}</div></div>
+    <div class="date-chip"><div class="wd">${escapeHtml(wd)}</div><div class="d">${day}</div><div class="m">${escapeHtml(mon)}</div></div>
     <div>
       <strong>${escapeHtml(e.title)}</strong>
       <div class="meta">${range}${e.location ? " · " + escapeHtml(e.location) : ""}</div>
