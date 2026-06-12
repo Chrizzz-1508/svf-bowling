@@ -25,11 +25,16 @@ function placeholderImage(kind, alt = "") {
   return `<img src="${src}" alt="${escapeHtml(alt)}" loading="lazy">`;
 }
 
+// Echtes Bild in fester Thumbnail-Box, zentriert & vollständig sichtbar (kein Crop)
+function thumbImage(url, alt = "") {
+  return `<img src="${url}" alt="${escapeHtml(alt)}" loading="lazy">`;
+}
+
 // ---- News-Karte ----
 function newsCard(n) {
   const img = SVF.imageUrl(n.titleImageId);
   const thumb = img
-    ? `<a href="artikel.html?slug=${encodeURIComponent(n.slug)}" class="thumb" style="background-image:url('${img}')"></a>`
+    ? `<a href="artikel.html?slug=${encodeURIComponent(n.slug)}" class="thumb">${thumbImage(img, n.title)}</a>`
     : `<a href="artikel.html?slug=${encodeURIComponent(n.slug)}" class="thumb placeholder">${placeholderImage("news", "Bericht")}</a>`;
   return `<article class="card">
     ${thumb}
@@ -137,13 +142,8 @@ const PAGES = {
         const p = document.getElementById("hero-text");
         if (h && s.tagline) h.textContent = s.tagline;
         if (p && s.welcomeText) p.textContent = s.welcomeText;
-        // Headerbild aus den Einstellungen steuert den Hero-Hintergrund.
-        // Die rechte Hero-Grafik bleibt eine eigenständige Illustration.
-        const hero = document.querySelector(".hero");
-        if (hero && s.headerImageId) {
-          hero.style.backgroundImage =
-            `linear-gradient(90deg, rgba(17,20,24,.94) 0%, rgba(17,20,24,.84) 45%, rgba(17,20,24,.58) 100%), url("${SVF.imageUrl(s.headerImageId)}"), linear-gradient(135deg, #111418 0%, #20262c 100%)`;
-        }
+        // Kein DB-Headerbild mehr im Hero -> verhindert das kurze "Aufblitzen".
+        // Logo & Grafiken sind statische Assets.
       }
 
       loading("home-news");
@@ -151,16 +151,20 @@ const PAGES = {
       document.getElementById("home-news").innerHTML =
         news.length ? news.map(newsCard).join("") : `<div class="empty">Noch keine Berichte.</div>`;
 
-      // Zuletzt aktualisierte Liga-Tabelle (aktuellster Stand zuerst)
-      const tables = await SVF.get("/api/standings?type=Liga");
+      // Startseiten-Tabelle: explizit gewählte (Einstellungen) oder Fallback = aktuellste Liga
       const box = document.getElementById("home-standings");
-      if (tables.length) {
-        tables.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-        const full = await getStandingsFull(tables[0].id);
-        box.innerHTML = renderStandings(full);
-      } else {
-        box.innerHTML = `<div class="empty">Noch keine Ligatabelle.</div>`;
+      let table = null;
+      if (s && s.homeStandingsTableId) {
+        table = await getStandingsFull(s.homeStandingsTableId).catch(() => null);
       }
+      if (!table) {
+        const tables = await SVF.get("/api/standings?type=Liga");
+        if (tables.length) {
+          tables.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+          table = await getStandingsFull(tables[0].id).catch(() => null);
+        }
+      }
+      box.innerHTML = table ? renderStandings(table) : `<div class="empty">Noch keine Tabelle hinterlegt.</div>`;
 
       // Nächste Termine
       const evBox = document.getElementById("home-events");
@@ -399,7 +403,7 @@ const PAGES = {
       document.getElementById(box).innerHTML = teams.map(t => {
         const img = SVF.imageUrl(t.photoImageId);
         return `<article class="card">
-          ${img ? `<div class="thumb" style="background-image:url('${img}')"></div>` : `<div class="thumb placeholder">${placeholderImage("teams", "Mannschaft")}</div>`}
+          ${img ? `<div class="thumb">${thumbImage(img, t.name)}</div>` : `<div class="thumb placeholder">${placeholderImage("teams", "Mannschaft")}</div>`}
           <div class="card-body">
             ${t.league ? `<span class="badge">${escapeHtml(t.league)}</span>` : ""}
             <h3>${escapeHtml(t.name)}</h3>
@@ -434,7 +438,7 @@ const PAGES = {
       document.getElementById(box).innerHTML = `<div class="grid grid-3">` + albums.map(a => {
         const img = SVF.imageUrl(a.coverImageId);
         return `<a class="card" href="galerie.html?album=${a.id}" style="text-decoration:none;color:inherit">
-          ${img ? `<div class="thumb" style="background-image:url('${img}')"></div>` : `<div class="thumb placeholder">${placeholderImage("gallery", "Galerie")}</div>`}
+          ${img ? `<div class="thumb">${thumbImage(img, a.title)}</div>` : `<div class="thumb placeholder">${placeholderImage("gallery", "Galerie")}</div>`}
           <div class="card-body">
             <h3>${escapeHtml(a.title)}</h3>
             <div class="meta">${a.eventDate ? formatDate(a.eventDate) + " · " : ""}${a.imageCount} Bild(er)</div>
@@ -480,13 +484,20 @@ const PAGES = {
     } catch (e) { showError(box, e.message); }
   },
 
-  // -------------------- Verein + Downloads --------------------
+  // -------------------- Verein --------------------
+  // Die Verein-Seite ist als kuratiertes Layout in verein.html aufgebaut.
+  // Hier nur Kontaktdaten aus den Einstellungen einsetzen.
   async verein() {
     try {
-      const page = await SVF.get("/api/pages/verein").catch(() => null);
-      const content = document.getElementById("verein-content");
-      if (content) content.innerHTML = page ? `<h1>${escapeHtml(page.title)}</h1><div class="article-content">${page.contentHtml}</div>` : "<h1>Über uns</h1>";
+      const s = await SVF.get("/api/settings").catch(() => null);
+      if (!s) return;
+      const lead = document.getElementById("verein-lead");
+      if (lead && s.welcomeText) lead.textContent = s.welcomeText;
     } catch { /* */ }
+  },
+
+  // -------------------- Downloads (eigener Tab) --------------------
+  async downloads() {
     const box = "downloads";
     loading(box);
     try {
@@ -497,7 +508,7 @@ const PAGES = {
             <div class="grow"><strong>${escapeHtml(d.title)}</strong>${d.description ? `<div class="meta">${escapeHtml(d.description)}</div>` : ""}</div>
             <a class="btn btn-sm btn-ghost" href="${SVF.downloadUrl(d.id)}" target="_blank" rel="noopener">Download</a>
           </div>`).join("")
-        : `<div class="empty">Keine Downloads vorhanden.</div>`;
+        : `<div class="empty">Aktuell stehen keine Downloads bereit.</div>`;
     } catch (e) { showError(box, e.message); }
   },
 

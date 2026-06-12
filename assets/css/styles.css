@@ -166,10 +166,16 @@ p { margin: 0 0 1rem; }
   transition: transform .18s, box-shadow .18s, border-color .18s;
 }
 .card:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(15,18,22,.1); border-color: #cfd5dc; }
-.card .thumb { aspect-ratio: 16/9; background: var(--color-bg) center/cover no-repeat; }
-.card .thumb.placeholder { display: grid; place-items: center; background: linear-gradient(150deg, #f7f8fa, #e9edf1); }
+/* Feste Höhe + Bild zentriert und vollständig sichtbar (contain, kein Crop) ->
+   Titel/Texte aller Karten starten dadurch auf gleicher Höhe (auch mobil). */
+.card .thumb {
+  height: 180px; flex: none; display: flex; align-items: center; justify-content: center;
+  background: var(--color-bg); overflow: hidden; padding: 8px;
+}
+.card .thumb img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
+.card .thumb.placeholder { background: linear-gradient(150deg, #f7f8fa, #e9edf1); }
 .card .thumb.placeholder svg { width: 64px; height: 64px; opacity: .35; }
-.card .thumb.placeholder img { width: 68%; height: 68%; object-fit: contain; opacity: .92; filter: drop-shadow(0 10px 18px rgba(15,18,22,.12)); }
+.card .thumb.placeholder img { max-width: 60%; max-height: 78%; opacity: .92; filter: drop-shadow(0 10px 18px rgba(15,18,22,.12)); }
 .card .card-body { padding: 1.15rem 1.25rem 1.35rem; display: flex; flex-direction: column; gap: .5rem; flex: 1; }
 .card h3 { margin: 0; font-size: 1.14rem; }
 .card .card-body p { margin: 0; color: var(--color-muted); font-size: .95rem; }
@@ -442,3 +448,25 @@ table.data thead th.sort-desc::after { content: " ▼"; font-size: .65em; }
 /* ---------- Sektions-Illustrationen ---------- */
 .section-art { width: 64px; height: 64px; object-fit: contain; flex: none; }
 .section-head .with-art { display: flex; align-items: center; gap: 1rem; }
+
+/* ---------- Logo-Bild im Header (statisch, kein Flash) ---------- */
+.brand .logo { width: 46px; height: 46px; object-fit: contain; border-radius: 8px; }
+
+/* ---------- Footer: dezenter Login-Link ---------- */
+.footer-login { opacity: .75; }
+.footer-login:hover { opacity: 1; }
+
+/* ---------- Verein-Seite (kuratiertes Layout) ---------- */
+.verein-lead { font-size: 1.12rem; color: var(--color-ink-soft); max-width: 60ch; }
+.info-cards { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.info-card {
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 1.3rem 1.4rem;
+}
+.info-card h3 { margin: 0 0 .5rem; font-size: 1.1rem; }
+.info-card .icon { font-size: 1.6rem; line-height: 1; margin-bottom: .4rem; display: block; }
+.info-card a { font-weight: 600; }
+.info-card ul { margin: .3rem 0 0; padding-left: 1.1rem; }
+.info-card ul li { margin-bottom: .2rem; }
+.map-wrap { position: relative; width: 100%; aspect-ratio: 16/8; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--color-border); }
+.map-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }

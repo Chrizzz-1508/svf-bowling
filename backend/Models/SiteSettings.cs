@@ -14,4 +14,10 @@ public class SiteSettings
     public string? InstagramUrl { get; set; }
     public int? LogoImageId { get; set; }
     public int? HeaderImageId { get; set; }
+
+    /// <summary>
+    /// Welche Ergebnis-Tabelle auf der Startseite angezeigt wird.
+    /// null = automatisch (zuletzt aktualisierte Liga-Tabelle).
+    /// </summary>
+    public int? HomeStandingsTableId { get; set; }
 }

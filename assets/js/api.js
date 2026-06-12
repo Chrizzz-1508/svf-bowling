@@ -63,9 +63,10 @@ function formatDate(iso, withTime = false) {
   const d = new Date(iso);
   if (isNaN(d)) return "";
   const opt = withTime
-    ? { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }
+    ? { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }
     : { day: "2-digit", month: "long", year: "numeric" };
-  return d.toLocaleDateString("de-DE", opt);
+  // hour12:false erzwingt 24h (kein AM/PM), unabhängig von der Browser-Sprache
+  return withTime ? d.toLocaleString("de-DE", opt) : d.toLocaleDateString("de-DE", opt);
 }
 
 function qs(name) { return new URLSearchParams(location.search).get(name); }

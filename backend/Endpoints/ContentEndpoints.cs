@@ -175,8 +175,9 @@ public static class ContentEndpoints
         }).WithTags("Termine");
 
         var admin = app.MapGroup("/api/admin/events").WithTags("Termine (Admin)").RequireAuthorization();
+        // Neueste Termine zuerst (Verwaltung)
         admin.MapGet("/", async (AppDbContext db) =>
-            Results.Ok(await db.Events.OrderBy(e => e.StartDate).ToListAsync()));
+            Results.Ok(await db.Events.OrderByDescending(e => e.StartDate).ToListAsync()));
         admin.MapPost("/", async (Event input, AppDbContext db) =>
         {
             input.Id = 0; db.Events.Add(input); await db.SaveChangesAsync();
@@ -255,6 +256,7 @@ public static class ContentEndpoints
                 s.ContactEmail = input.ContactEmail; s.ContactPhone = input.ContactPhone; s.Address = input.Address;
                 s.FacebookUrl = input.FacebookUrl; s.InstagramUrl = input.InstagramUrl;
                 s.LogoImageId = input.LogoImageId; s.HeaderImageId = input.HeaderImageId;
+                s.HomeStandingsTableId = input.HomeStandingsTableId;
             }
             await db.SaveChangesAsync();
             return Results.Ok(await db.SiteSettings.FindAsync(1));

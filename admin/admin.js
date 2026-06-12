@@ -509,9 +509,10 @@ function renderField(f, value, isEdit) {
     case "checkbox":
       return `<div class="field"><label class="check"><input type="checkbox" id="${id}" name="${f.name}" ${value ? "checked" : ""}> ${escapeHtml(f.label)}</label></div>`;
     case "date":
-      inner = `<input type="date" id="${id}" name="${f.name}" value="${toDateInput(value)}">`; break;
+      inner = `<input type="date" id="${id}" name="${f.name}" lang="de-DE" value="${toDateInput(value)}">`; break;
     case "datetime":
-      inner = `<input type="datetime-local" id="${id}" name="${f.name}" value="${toLocalInput(value)}">`; break;
+      // lang=de-DE -> 24h-Anzeige im nativen Picker (kein AM/PM)
+      inner = `<input type="datetime-local" id="${id}" name="${f.name}" lang="de-DE" step="60" value="${toLocalInput(value)}">`; break;
     case "email":
       inner = `<input type="email" id="${id}" name="${f.name}" value="${escapeHtml(value || "")}" ${locked}>`; break;
     case "select":
@@ -706,23 +707,29 @@ function openDownloadForm() {
 // ---------------------------------------------------------------------------
 async function renderSettings(content) {
   try {
-    const s = await SVF.get("/api/settings");
+    const [s, standings] = await Promise.all([SVF.get("/api/settings"), SVF.get("/api/admin/standings").catch(() => [])]);
+    const seasons = await loadSeasons().catch(() => []);
+    const seasonName = id => (seasons.find(x => x.id === id) || {}).name || "";
+    const tableOpts = [{ value: "", label: "Automatisch (aktuellste Liga-Tabelle)" }]
+      .concat(standings.map(t => ({ value: t.id, label: `${t.title}${t.seasonId ? " – " + seasonName(t.seasonId) : ""}` })));
+
     const fields = [
       { name: "clubName", label: "Vereinsname", type: "text" },
       { name: "tagline", label: "Slogan (Hero/Untertitel)", type: "text" },
       { name: "welcomeText", label: "Begrüßungstext (Startseite)", type: "textarea" },
+      { name: "homeStandingsTableId", label: "Tabelle auf der Startseite", type: "select", options: tableOpts,
+        hint: "Es wird genau diese eine Tabelle auf der Startseite angezeigt." },
       { name: "contactEmail", label: "Kontakt-E-Mail", type: "email" },
       { name: "contactPhone", label: "Telefon", type: "text" },
       { name: "address", label: "Adresse", type: "text" },
       { name: "facebookUrl", label: "Facebook-URL", type: "text" },
-      { name: "instagramUrl", label: "Instagram-URL", type: "text" },
-      { name: "logoImageId", label: "Logo", type: "image" },
-      { name: "headerImageId", label: "Header-Bild", type: "image" }
+      { name: "instagramUrl", label: "Instagram-URL", type: "text" }
     ];
+    fields.forEach(f => { if (f.type === "select") f._opts = f.options; });
+
     content.innerHTML = `<div class="modal-card" style="max-width:680px;margin:0">
       <div class="modal-body"><form id="settings-form">${fields.map(f => renderField(f, s[f.name])).join("")}</form></div>
       <div class="modal-foot"><button class="btn" id="save-settings">Speichern</button></div></div>`;
-    initImageFields(content);
     content.querySelector("#save-settings").addEventListener("click", async () => {
       const v = readForm(fields, content);
       try { await SVF.send("PUT", "/api/admin/settings", Object.assign({ id: 1 }, s, v)); toast("Gespeichert."); }
