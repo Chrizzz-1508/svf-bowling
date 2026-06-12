@@ -60,7 +60,7 @@ const RESOURCES = {
       { name: "author", label: "Autor", type: "text" },
       { name: "titleImageId", label: "Titelbild", type: "image" },
       { name: "excerpt", label: "Kurzbeschreibung", type: "textarea", hint: "Wird in der Übersicht angezeigt." },
-      { name: "contentHtml", label: "Inhalt", type: "html", required: true, hint: "HTML erlaubt (z. B. <p>, <strong>, <ul>). Zeilen werden nicht automatisch umgebrochen." },
+      { name: "contentHtml", label: "Inhalt", type: "html", required: true, hint: "Text direkt mit der Werkzeugleiste formatieren. HTML-Kenntnisse sind nicht nötig." },
       { name: "publishedAt", label: "Veröffentlicht am", type: "datetime" },
       { name: "isPublished", label: "Veröffentlicht (sonst Entwurf)", type: "checkbox" }
     ]
@@ -171,7 +171,7 @@ const RESOURCES = {
     fields: [
       { name: "title", label: "Titel", type: "text", required: true },
       { name: "slug", label: "Slug", type: "text", hint: "z. B. impressum, datenschutz, verein" },
-      { name: "contentHtml", label: "Inhalt", type: "html", required: true }
+      { name: "contentHtml", label: "Inhalt", type: "html", required: true, hint: "Text direkt mit der Werkzeugleiste formatieren. HTML-Kenntnisse sind nicht nötig." }
     ]
   },
   users: {

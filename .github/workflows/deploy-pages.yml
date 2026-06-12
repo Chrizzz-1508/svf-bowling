@@ -1,13 +1,16 @@
-name: Deploy frontend to GitHub Pages
+name: Deploy static site to GitHub Pages
 
-# Veröffentlicht den Inhalt von frontend/ auf GitHub Pages.
-# Läuft automatisch bei jedem Push auf main, der frontend/ ändert.
+# Veroeffentlicht die statische Website aus dem Repository-Root auf GitHub Pages.
+# Backend, Migrations und Quellcode werden nicht in das Pages-Artefakt kopiert.
 
 on:
   push:
     branches: [main]
     paths:
-      - "frontend/**"
+      - "*.html"
+      - "assets/**"
+      - "admin/**"
+      - "config.js"
       - ".github/workflows/deploy-pages.yml"
   workflow_dispatch:
 
@@ -29,8 +32,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      - name: Prepare root static site
+        shell: bash
+        run: |
+          rm -rf _site
+          mkdir -p _site
+          cp -v *.html config.js _site/
+          cp -R assets admin _site/
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: frontend
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4
