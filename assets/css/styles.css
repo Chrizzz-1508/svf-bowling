@@ -47,7 +47,7 @@ body {
 }
 body[data-page] { display: flex; flex-direction: column; }
 body[data-page] .site-main { flex: 1 0 auto; width: 100%; }
-img { max-width: 100%; display: block; }
+img { max-width: 100%; height: auto; display: block; }
 a { color: var(--color-primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
 h1, h2, h3 { line-height: 1.15; margin: 0 0 .5em; font-weight: 800; letter-spacing: 0; }
@@ -330,7 +330,14 @@ table.data td.rank { font-weight: 800; color: var(--color-primary-dark); width: 
 .article { max-width: 760px; margin-inline: auto; }
 .article .hero-img { width: 100%; border-radius: var(--radius); margin: 1.2rem 0 1.6rem; box-shadow: var(--shadow); aspect-ratio: 16/9; object-fit: cover; }
 .article-content { font-size: 1.05rem; }
-.article-content img { border-radius: var(--radius-sm); margin: 1rem 0; }
+.article-content img {
+  max-width: 100%;
+  width: auto;
+  height: auto !important;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  margin: 1rem 0;
+}
 .article-content h2, .article-content h3 { margin-top: 1.6rem; }
 .article-content table { border-collapse: collapse; margin: 1rem 0; font-size: .92rem; max-width: 100%; display: block; overflow-x: auto; }
 .article-content table td, .article-content table th { border: 1px solid var(--color-border); padding: .4rem .7rem; }
