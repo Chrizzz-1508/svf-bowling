@@ -47,6 +47,33 @@ function newsCard(n) {
   </article>`;
 }
 
+function externalNewsSourceCard(source) {
+  const items = source.items || [];
+  const feedItems = items.length
+    ? items.map(externalNewsItem).join("")
+    : `<li class="feed-empty">${escapeHtml(source.error || "Aktuell keine Meldungen verfügbar.")}</li>`;
+
+  return `<article class="feed-card">
+    <div class="feed-head">
+      <div>
+        <span class="badge">${escapeHtml(source.name)}</span>
+        <h3>${escapeHtml(source.name.replace("-News", ""))}</h3>
+      </div>
+      <a class="btn btn-sm btn-ghost" href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">Quelle</a>
+    </div>
+    <ul class="feed-list">${feedItems}</ul>
+  </article>`;
+}
+
+function externalNewsItem(item) {
+  const date = item.publishedAt ? formatDate(item.publishedAt) : "";
+  return `<li class="feed-item">
+    <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a>
+    <div class="meta">${date ? escapeHtml(date) + " · " : ""}${escapeHtml(item.sourceName || "")}</div>
+    ${item.summary ? `<p>${escapeHtml(item.summary)}</p>` : ""}
+  </li>`;
+}
+
 // ---- Generische Ergebnis-Tabelle rendern ----
 function renderStandings(table, hideTitle) {
   let columns = [];
@@ -193,21 +220,25 @@ const PAGES = {
     let categories = [];
     try { categories = await SVF.get("/api/categories"); } catch { /* */ }
 
-    let activeCat = qs("category") ? parseInt(qs("category")) : null;
+    let externalMode = ["verband", "verbandsnews", "external"].includes((qs("category") || "").toLowerCase());
+    let activeCat = externalMode ? null : (qs("category") ? parseInt(qs("category")) : null);
     let offset = 0;
 
     function renderPills() {
       filterBox.innerHTML =
-        `<button class="pill ${activeCat === null ? "active" : ""}" data-cat="">Alle</button>` +
-        categories.map(c => `<button class="pill ${activeCat === c.id ? "active" : ""}" data-cat="${c.id}">${escapeHtml(c.name)}</button>`).join("");
+        `<button class="pill ${!externalMode && activeCat === null ? "active" : ""}" data-cat="">Alle</button>` +
+        categories.map(c => `<button class="pill ${!externalMode && activeCat === c.id ? "active" : ""}" data-cat="${c.id}">${escapeHtml(c.name)}</button>`).join("") +
+        `<button class="pill ${externalMode ? "active" : ""}" data-feed="external">WKBV / DBU</button>`;
       filterBox.querySelectorAll(".pill").forEach(p => p.addEventListener("click", () => {
-        activeCat = p.dataset.cat ? parseInt(p.dataset.cat) : null;
+        externalMode = p.dataset.feed === "external";
+        activeCat = externalMode ? null : (p.dataset.cat ? parseInt(p.dataset.cat) : null);
         offset = 0;
         renderPills(); load(true);
       }));
     }
 
     async function load(reset) {
+      if (externalMode) return loadExternal(reset);
       if (reset) { listEl.innerHTML = `<div class="loader" style="grid-column:1/-1"><div class="spinner"></div>Lädt…</div>`; moreWrap.innerHTML = ""; }
       try {
         // take = PAGE+1: das Extra-Element verrät, ob es weitere gibt
@@ -229,6 +260,23 @@ const PAGES = {
         const btn = document.getElementById("more-btn");
         if (btn) btn.addEventListener("click", () => { btn.disabled = true; btn.textContent = "Lädt…"; load(false); });
       } catch (e) { showError("news-list", e.message); }
+    }
+
+    async function loadExternal(reset) {
+      if (reset) {
+        listEl.innerHTML = `<div class="loader" style="grid-column:1/-1"><div class="spinner"></div>Lädt…</div>`;
+        moreWrap.innerHTML = "";
+      }
+      try {
+        const data = await SVF.get("/api/external-news");
+        const sources = data.sources || [];
+        listEl.innerHTML = sources.length
+          ? sources.map(externalNewsSourceCard).join("") +
+            `<div class="feed-legal-note">Externe Verbandsmeldungen werden hier nur als kurze Teaser mit Quellenlink angezeigt. Die vollständigen Inhalte liegen bei WKBV und DBU.</div>`
+          : `<div class="empty" style="grid-column:1/-1">Aktuell keine Verbandsnews verfügbar.</div>`;
+      } catch (e) {
+        listEl.innerHTML = `<div class="error-box" style="grid-column:1/-1">${escapeHtml(e.message)}<br><small>Verbandsnews konnten gerade nicht geladen werden.</small></div>`;
+      }
     }
 
     renderPills();

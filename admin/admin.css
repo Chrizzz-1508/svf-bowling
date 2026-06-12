@@ -10,6 +10,7 @@
 .login-card h1 { font-size: 1.4rem; text-align: center; }
 .login-card .logo-row { display: grid; place-items: center; margin-bottom: .5rem; }
 .login-card .logo-row svg { width: 56px; height: 56px; }
+.login-card .logo-row img { width: 72px; height: 72px; object-fit: contain; border-radius: 8px; }
 
 /* ---- Shell ---- */
 .admin-shell { display: flex; min-height: 100vh; }
@@ -17,7 +18,8 @@
   width: clamp(220px, 11vw, 280px); flex: none; background: var(--color-bg-dark); color: #cfd3d8;
   display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh;
 }
-.admin-side .side-brand { display: flex; align-items: center; gap: .6rem; padding: 1rem 1.1rem; font-weight: 800; color: #fff; border-bottom: 1px solid rgba(255,255,255,.08); }
+.admin-side .side-brand { display: flex; align-items: center; gap: .6rem; padding: 1rem 1.1rem; font-weight: 800; color: #fff; border-bottom: 1px solid rgba(255,255,255,.08); text-decoration: none; }
+.admin-side .side-brand:hover { background: rgba(255,255,255,.06); text-decoration: none; }
 .admin-side .side-brand svg { width: 30px; height: 30px; }
 .admin-nav { padding: .6rem; overflow-y: auto; flex: 1; }
 .admin-nav button {
@@ -133,7 +135,9 @@ tr.dragging { opacity: .45; background: #fdeef0 !important; }
    ============================================================================ */
 /* Logo links in der Top-Bar – auf Desktop zeigt die Sidebar bereits das Branding,
    daher nur einblenden, wenn die Sidebar eingeklappt ist (mobil). */
-.admin-logo { display: none; width: 38px; height: 38px; object-fit: contain; border-radius: 8px; flex: none; }
+.admin-logo-link { display: none; flex: none; text-decoration: none; }
+.admin-logo-link:hover { text-decoration: none; }
+.admin-logo { display: block; width: 38px; height: 38px; object-fit: contain; border-radius: 8px; }
 .admin-top h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .admin-top { flex-wrap: nowrap; }
 
@@ -149,7 +153,7 @@ tr.dragging { opacity: .45; background: #fdeef0 !important; }
 }
 
 @media (max-width: 860px) {
-  .admin-logo { display: block; }                     /* Logo oben links, wenn Sidebar eingeklappt */
+  .admin-logo-link { display: block; }                /* Logo oben links, wenn Sidebar eingeklappt */
   .admin-shell.nav-open .admin-backdrop {
     display: block; position: fixed; inset: 0; background: rgba(15,18,22,.45); z-index: 55;
   }

@@ -65,6 +65,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization(options =>
     options.AddPolicy("Admin", p => p.RequireRole("Admin")));
 
+builder.Services.AddHttpClient("external-news", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(8);
+});
+
 // Öffentliche Read-API mit Bearer-Token-Auth (keine Cookies) → alle Origins erlaubt.
 builder.Services.AddCors(options => options.AddDefaultPolicy(p =>
     p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
@@ -104,6 +109,7 @@ app.MapNewsEndpoints();
 app.MapStandingsEndpoints();
 app.MapContentEndpoints();
 app.MapMediaEndpoints();
+app.MapExternalNewsEndpoints();
 app.MapUtilityEndpoints();
 
 // ---------------- DB migrieren + seeden ----------------

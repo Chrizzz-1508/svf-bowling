@@ -249,7 +249,7 @@ function renderLogin(msg) {
   document.getElementById("app").innerHTML = `
     <div class="login-wrap">
       <form class="login-card" id="login-form">
-        <div class="logo-row">${LOGO_SVG}</div>
+        <div class="logo-row"><img src="../assets/img/logo.png" alt="SV Fellbach Bowling"></div>
         <h1>Admin-Login</h1>
         <p class="muted center" style="margin-top:-.4rem">SV Fellbach – Abteilung Bowling</p>
         ${msg ? `<div class="error-box" style="margin-bottom:1rem">${escapeHtml(msg)}</div>` : ""}
@@ -286,14 +286,14 @@ function renderShell() {
   document.getElementById("app").innerHTML = `
     <div class="admin-shell" id="shell">
       <aside class="admin-side" id="side">
-        <div class="side-brand"><img src="../assets/img/logo.png" alt="" width="30" height="30"><span>SVF Bowling</span></div>
+        <a class="side-brand" href="../index.html" target="_blank" rel="noopener noreferrer" title="Zur Website"><img src="../assets/img/logo.png" alt="" width="30" height="30"><span>SVF Bowling</span></a>
         <nav class="admin-nav">${nav}</nav>
       </aside>
       <div class="admin-backdrop" id="backdrop"></div>
       <div class="admin-main">
         <div class="admin-top">
           <button class="admin-burger" id="burger" aria-label="Menü"><span></span><span></span><span></span></button>
-          <img class="admin-logo" src="../assets/img/logo.png" alt="SVF Bowling">
+          <a class="admin-logo-link" href="../index.html" target="_blank" rel="noopener noreferrer" title="Zur Website"><img class="admin-logo" src="../assets/img/logo.png" alt="SVF Bowling"></a>
           <h1 id="section-title">Übersicht</h1>
           <div class="spacer"></div>
           <span class="who">${escapeHtml(user.username || "")} (${escapeHtml(user.role || "")})</span>
