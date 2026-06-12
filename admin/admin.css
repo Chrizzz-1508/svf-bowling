@@ -107,3 +107,54 @@ tr.dragging { opacity: .45; background: #fdeef0 !important; }
 .field .ql-toolbar { border-radius: var(--radius-sm) var(--radius-sm) 0 0; border-color: var(--color-border); }
 .field .ql-container { border-radius: 0 0 var(--radius-sm) var(--radius-sm); border-color: var(--color-border); font-size: 1rem; font-family: inherit; min-height: 220px; }
 .ql-editor { min-height: 220px; }
+
+/* ============================================================================
+   Logo links + responsives Verhalten (Bearbeitung vom Handy)
+   ============================================================================ */
+/* Logo links in der Top-Bar – auf Desktop zeigt die Sidebar bereits das Branding,
+   daher nur einblenden, wenn die Sidebar eingeklappt ist (mobil). */
+.admin-logo { display: none; width: 38px; height: 38px; object-fit: contain; border-radius: 8px; flex: none; }
+.admin-top h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-top { flex-wrap: nowrap; }
+
+/* Mobiler Drawer-Backdrop */
+.admin-backdrop { display: none; }
+
+/* Tabellen horizontal scrollbar (statt Überlauf) */
+.atable-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: var(--radius); }
+
+@media (max-width: 860px) {
+  .admin-logo { display: block; }                     /* Logo oben links, wenn Sidebar eingeklappt */
+  .admin-shell.nav-open .admin-backdrop {
+    display: block; position: fixed; inset: 0; background: rgba(15,18,22,.45); z-index: 55;
+  }
+}
+
+@media (max-width: 760px) {
+  .admin-top { padding: .6rem .9rem; gap: .5rem; }
+  .admin-top h1 { font-size: 1.05rem; }
+  .admin-top .who { display: none; }                 /* Benutzer/Rolle ausblenden – Platz sparen */
+  .admin-top .admin-website { display: none; }       /* "Website" entfällt mobil (Logo bleibt) */
+  .admin-logo { width: 34px; height: 34px; }
+  .admin-content { padding: 1rem .8rem; }
+  .toolbar { gap: .5rem; }
+  .toolbar .btn { width: 100%; justify-content: center; }
+  .toolbar .spacer { display: none; }
+
+  /* Listen-Tabellen kompakter + Aktionsbuttons untereinander */
+  .atable th, .atable td { padding: .55rem .6rem; font-size: .9rem; }
+  .atable td.actions-cell .actions { flex-direction: column; align-items: stretch; }
+  .atable td.actions-cell .btn { width: 100%; justify-content: center; }
+
+  /* Modals nehmen fast die volle Breite/Höhe ein */
+  .modal { padding: 0; }
+  .modal-card, .modal-card.wide { max-width: none; margin: 0; min-height: 100%; border-radius: 0; }
+  .modal-body { padding: 1.1rem; }
+  .modal-foot { position: sticky; bottom: 0; background: #fff; }
+  .modal-foot .btn { flex: 1; justify-content: center; }
+
+  /* Bildbibliothek + Standings-Editor */
+  .img-lib { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+  .img-picker { flex-wrap: wrap; }
+  .row { gap: .6rem; }
+}

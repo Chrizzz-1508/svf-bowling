@@ -284,27 +284,34 @@ function renderShell() {
     items.map(s => `<button data-go="${s.key}">${escapeHtml(s.label)}</button>`).join("")).join("");
 
   document.getElementById("app").innerHTML = `
-    <div class="admin-shell">
+    <div class="admin-shell" id="shell">
       <aside class="admin-side" id="side">
-        <div class="side-brand">${LOGO_SVG}<span>SVF Bowling</span></div>
+        <div class="side-brand"><img src="../assets/img/logo.png" alt="" width="30" height="30"><span>SVF Bowling</span></div>
         <nav class="admin-nav">${nav}</nav>
       </aside>
+      <div class="admin-backdrop" id="backdrop"></div>
       <div class="admin-main">
         <div class="admin-top">
-          <button class="admin-burger" id="burger"><span></span><span></span><span></span></button>
+          <button class="admin-burger" id="burger" aria-label="Menü"><span></span><span></span><span></span></button>
+          <img class="admin-logo" src="../assets/img/logo.png" alt="SVF Bowling">
           <h1 id="section-title">Übersicht</h1>
           <div class="spacer"></div>
           <span class="who">${escapeHtml(user.username || "")} (${escapeHtml(user.role || "")})</span>
-          <a class="btn btn-sm btn-neutral" href="../index.html" target="_blank">Website</a>
+          <a class="btn btn-sm btn-neutral admin-website" href="../index.html" target="_blank">Website</a>
           <button class="btn btn-sm btn-neutral" id="logout">Abmelden</button>
         </div>
         <div class="admin-content" id="content"></div>
       </div>
     </div>`;
 
-  document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => { go(b.dataset.go); document.getElementById("side").classList.remove("open"); }));
+  const side = document.getElementById("side");
+  const shell = document.getElementById("shell");
+  const setDrawer = open => { side.classList.toggle("open", open); shell.classList.toggle("nav-open", open); };
+
+  document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => { go(b.dataset.go); setDrawer(false); }));
   document.getElementById("logout").addEventListener("click", logout);
-  document.getElementById("burger").addEventListener("click", () => document.getElementById("side").classList.toggle("open"));
+  document.getElementById("burger").addEventListener("click", () => setDrawer(!side.classList.contains("open")));
+  document.getElementById("backdrop").addEventListener("click", () => setDrawer(false));
 }
 
 function go(key) {
