@@ -137,10 +137,12 @@ const PAGES = {
         const p = document.getElementById("hero-text");
         if (h && s.tagline) h.textContent = s.tagline;
         if (p && s.welcomeText) p.textContent = s.welcomeText;
-        // Headerbild aus den Einstellungen ersetzt die Hero-Grafik
-        const art = document.getElementById("hero-art");
-        if (art && s.headerImageId) {
-          art.innerHTML = `<img src="${SVF.imageUrl(s.headerImageId)}" alt="" style="border-radius:var(--radius);max-height:280px;object-fit:cover">`;
+        // Headerbild aus den Einstellungen steuert den Hero-Hintergrund.
+        // Die rechte Hero-Grafik bleibt eine eigenständige Illustration.
+        const hero = document.querySelector(".hero");
+        if (hero && s.headerImageId) {
+          hero.style.backgroundImage =
+            `linear-gradient(90deg, rgba(17,20,24,.94) 0%, rgba(17,20,24,.84) 45%, rgba(17,20,24,.58) 100%), url("${SVF.imageUrl(s.headerImageId)}"), linear-gradient(135deg, #111418 0%, #20262c 100%)`;
         }
       }
 
