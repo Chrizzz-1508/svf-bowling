@@ -232,7 +232,7 @@ const PAGES = {
     }
 
     renderPills();
-    load(true);
+    await load(true);
   },
 
   // -------------------- Einzel-Artikel --------------------
@@ -368,7 +368,7 @@ const PAGES = {
     function refreshAll() {
       renderTypeSelect();
       renderSeasonSelect();
-      renderEntrySelect();
+      return renderEntrySelect();
     }
 
     typeSel.addEventListener("change", () => {
@@ -390,7 +390,7 @@ const PAGES = {
     });
 
     activeSeasonId = chooseSeasonForType(activeType, activeSeasonId);
-    refreshAll();
+    await refreshAll();
   },
 
   // -------------------- Mannschaften --------------------
@@ -620,7 +620,15 @@ function initLightbox() {
     img.addEventListener("click", () => { lb.querySelector("img").src = img.dataset.full; lb.classList.add("open"); }));
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+// Lade-Gate: Inhalte erst einblenden, wenn Chrome (Einstellungen) UND der
+// Seiteninhalt fertig geladen sind -> kein Aufblitzen/Nachpoppen von DB-Inhalten.
+(async () => {
   const page = document.body.dataset.page;
-  if (page && PAGES[page]) PAGES[page]();
-});
+  const reveal = () => document.body.classList.add("ready");
+  const safety = setTimeout(reveal, 4000); // Sicherheitsnetz, falls eine API hängt
+  try {
+    if (window.SVF_CHROME_READY) await window.SVF_CHROME_READY;
+    if (page && PAGES[page]) await PAGES[page]();
+  } catch { /* trotzdem anzeigen */ }
+  finally { clearTimeout(safety); reveal(); }
+})();

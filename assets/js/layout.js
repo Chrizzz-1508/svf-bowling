@@ -88,7 +88,8 @@ function renderChrome() {
     </div>`;
   document.body.append(footer);
 
-  loadSettingsIntoChrome(header, footer);
+  // Promise zurückgeben, damit das Lade-Gate auf die Einstellungen warten kann.
+  return loadSettingsIntoChrome(header, footer);
 }
 
 async function loadSettingsIntoChrome(header, footer) {
@@ -117,4 +118,6 @@ async function loadSettingsIntoChrome(header, footer) {
   } catch { /* Backend evtl. offline – Chrome bleibt mit Standardtexten */ }
 }
 
-document.addEventListener("DOMContentLoaded", renderChrome);
+// Sofort starten (Skripte stehen am Body-Ende -> DOM ist vorhanden).
+// Das Promise stellt das Lade-Gate (public.js) bereit, um auf die Chrome-Daten zu warten.
+window.SVF_CHROME_READY = renderChrome();
