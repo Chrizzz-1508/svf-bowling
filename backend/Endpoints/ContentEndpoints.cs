@@ -24,6 +24,8 @@ public static class ContentEndpoints
             .WithTags("Saisons");
 
         var admin = app.MapGroup("/api/admin/seasons").WithTags("Saisons (Admin)").RequireAuthorization();
+        admin.MapGet("/", async (AppDbContext db) =>
+            Results.Ok(await db.Seasons.OrderBy(s => s.SortOrder).ThenByDescending(s => s.Name).ToListAsync()));
         admin.MapPost("/", async (Season input, AppDbContext db) =>
         {
             input.Id = 0;
@@ -66,6 +68,8 @@ public static class ContentEndpoints
             .WithTags("Kategorien");
 
         var admin = app.MapGroup("/api/admin/categories").WithTags("Kategorien (Admin)").RequireAuthorization();
+        admin.MapGet("/", async (AppDbContext db) =>
+            Results.Ok(await db.Categories.OrderBy(c => c.SortOrder).ThenBy(c => c.Name).ToListAsync()));
         admin.MapPost("/", async (Category input, AppDbContext db) =>
         {
             input.Id = 0; db.Categories.Add(input); await db.SaveChangesAsync();

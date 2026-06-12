@@ -104,6 +104,7 @@ app.MapNewsEndpoints();
 app.MapStandingsEndpoints();
 app.MapContentEndpoints();
 app.MapMediaEndpoints();
+app.MapUtilityEndpoints();
 
 // ---------------- DB migrieren + seeden ----------------
 using (var scope = app.Services.CreateScope())
