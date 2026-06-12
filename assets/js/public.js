@@ -176,12 +176,27 @@ function sortResultEntries(list, type) {
   );
 }
 
+async function loadManagedPageContent(slug, targetId) {
+  const target = document.getElementById(targetId);
+  if (!target) return null;
+  try {
+    const page = await SVF.get("/api/pages/" + encodeURIComponent(slug));
+    if (page && page.contentHtml) {
+      target.innerHTML = page.contentHtml;
+      if (page.title) document.title = page.title + " – SV Fellbach Bowling";
+      return page;
+    }
+  } catch { /* Fallback bleibt im HTML */ }
+  return null;
+}
+
 const PAGES = {
   // -------------------- Startseite --------------------
   async home() {
     try {
+      const managed = await loadManagedPageContent("startseite", "home-content");
       const s = await SVF.get("/api/settings").catch(() => null);
-      if (s) {
+      if (s && !managed) {
         const h = document.getElementById("hero-title");
         const p = document.getElementById("hero-text");
         if (h && s.tagline) h.textContent = s.tagline;
@@ -190,13 +205,17 @@ const PAGES = {
         // Logo & Grafiken sind statische Assets.
       }
 
-      loading("home-news");
-      const news = await SVF.get("/api/news?take=3");
-      document.getElementById("home-news").innerHTML =
-        news.length ? news.map(newsCard).join("") : `<div class="empty">Noch keine Berichte.</div>`;
+      const newsBox = document.getElementById("home-news");
+      if (newsBox) {
+        loading("home-news");
+        const news = await SVF.get("/api/news?take=3");
+        newsBox.innerHTML =
+          news.length ? news.map(newsCard).join("") : `<div class="empty">Noch keine Berichte.</div>`;
+      }
 
       // Startseiten-Tabelle: explizit gewählte (Einstellungen) oder Fallback = aktuellste Liga
       const box = document.getElementById("home-standings");
+      if (box) {
       let table = null;
       if (s && s.homeStandingsTableId) {
         table = await getStandingsFull(s.homeStandingsTableId).catch(() => null);
@@ -209,6 +228,7 @@ const PAGES = {
         }
       }
       box.innerHTML = table ? renderStandings(table) : `<div class="empty">Noch keine Tabelle hinterlegt.</div>`;
+      }
 
       // Nächste Termine
       const evBox = document.getElementById("home-events");
@@ -562,11 +582,10 @@ const PAGES = {
     } catch (e) { showError(box, e.message); }
   },
 
-  // -------------------- Verein --------------------
-  // Die Verein-Seite ist als kuratiertes Layout in verein.html aufgebaut.
-  // Hier nur Kontaktdaten aus den Einstellungen einsetzen.
   async verein() {
     try {
+      const managed = await loadManagedPageContent("verein", "verein-content");
+      if (managed) return;
       const s = await SVF.get("/api/settings").catch(() => null);
       if (!s) return;
       const lead = document.getElementById("verein-lead");
@@ -639,8 +658,8 @@ const PAGES = {
         }
         if (r.pages.length) {
           html += `<h3 class="search-group">Seiten</h3>` + r.pages.map(p => {
-            const known = ["impressum", "datenschutz", "verein"].includes(p.slug);
-            return `<a class="search-hit" href="${known ? p.slug + ".html" : "verein.html"}">
+            const pageLinks = { impressum: "impressum.html", datenschutz: "datenschutz.html", verein: "verein.html", startseite: "index.html" };
+            return `<a class="search-hit" href="${pageLinks[p.slug] || "verein.html"}">
               <strong>${escapeHtml(p.title)}</strong></a>`;
           }).join("");
         }

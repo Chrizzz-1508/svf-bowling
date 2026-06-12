@@ -170,7 +170,7 @@ const RESOURCES = {
     ],
     fields: [
       { name: "title", label: "Titel", type: "text", required: true },
-      { name: "slug", label: "Slug", type: "text", hint: "z. B. impressum, datenschutz, verein" },
+      { name: "slug", label: "Slug", type: "text", hint: "z. B. startseite, verein, impressum, datenschutz" },
       { name: "contentHtml", label: "Inhalt", type: "html", required: true, hint: "Text direkt mit der Werkzeugleiste formatieren. HTML-Kenntnisse sind nicht nötig." }
     ]
   },
