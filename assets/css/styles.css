@@ -137,6 +137,7 @@ p { margin: 0 0 1rem; }
   padding-block: 72px; position: relative; z-index: 1;
   display: grid; grid-template-columns: 1.25fr .75fr; gap: 2rem; align-items: center;
 }
+.hero .container > *, .grid > *, .training-cta > * { min-width: 0; }
 .hero h1 { color: #fff; max-width: 16ch; }
 .hero .kicker {
   display: inline-flex; align-items: center; gap: .5rem;
@@ -186,6 +187,22 @@ p { margin: 0 0 1rem; }
 .section-head > * { min-width: 0; }
 .section-head h2 { margin: 0; }
 .section-head .accent { width: 44px; height: 3px; background: var(--color-primary); border-radius: 2px; margin-bottom: .9rem; }
+.section-head .btn { flex: none; }
+@media (max-width: 560px) {
+  .container { padding-inline: 16px; }
+  .section-head { flex-direction: column; align-items: flex-start; gap: .75rem; }
+  .section-head .btn { max-width: 100%; }
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: minmax(0, 1fr); }
+  .card { min-width: 0; }
+  .card .card-body { min-width: 0; padding: 1rem; }
+  .hero h1 { max-width: 100%; font-size: 2rem; }
+  .hero p { max-width: 100%; font-size: 1rem; }
+  .hero .actions { flex-direction: column; align-items: stretch; }
+  .hero .actions .btn { width: 100%; justify-content: center; }
+  .search-bar { flex-direction: column; max-width: none; }
+  .search-bar input, .search-bar .btn { width: 100%; }
+  .card h3, .card p, .hero h1, .hero p { overflow-wrap: anywhere; }
+}
 
 /* ---------- Tabs (Segment-Steuerung, z. B. Ergebnisse) ---------- */
 .tabs {
