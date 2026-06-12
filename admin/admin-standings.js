@@ -20,7 +20,7 @@ async function renderStandingsSection(content) {
         <div class="spacer"></div><span class="muted">${tables.length} Tabellen</span>
       </div>
       ${tables.length > 1 ? `<p class="muted" style="font-size:.85rem">↕ Tabellen per Drag&nbsp;&amp;&nbsp;Drop am Griff sortieren.</p>` : ""}
-      ${tables.length ? `<table class="atable"><thead><tr><th></th><th>Titel</th><th>Typ</th><th>Saison</th><th>Status</th><th></th></tr></thead><tbody>
+      ${tables.length ? `<div class="atable-wrap"><table class="atable"><thead><tr><th></th><th>Titel</th><th>Typ</th><th>Saison</th><th>Status</th><th></th></tr></thead><tbody>
         ${tables.map(t => `<tr data-id="${t.id}">
           <td class="drag-cell"><span class="drag-handle" title="Ziehen zum Sortieren">⠿</span></td>
           <td>${escapeHtml(t.title)}</td><td>${escapeHtml(t.type)}</td><td>${escapeHtml(seasonName(t.seasonId))}</td>
@@ -29,7 +29,7 @@ async function renderStandingsSection(content) {
             <button class="btn btn-sm btn-neutral" data-edit="${t.id}">Bearbeiten</button>
             <button class="btn btn-sm btn-danger" data-del="${t.id}">Löschen</button>
           </div></td></tr>`).join("")}
-      </tbody></table>` : `<div class="empty">Noch keine Ergebnis-Tabellen. Lege die erste an.</div>`}`;
+      </tbody></table></div>` : `<div class="empty">Noch keine Ergebnis-Tabellen. Lege die erste an.</div>`}`;
     initDragSort(content.querySelector(".atable tbody"), "standings");
 
     content.querySelector("#new-table").addEventListener("click", () => openStandingsEditor(null, seasons));

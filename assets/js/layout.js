@@ -26,6 +26,14 @@ function renderChrome() {
   const active = document.body.dataset.page || "";
   const club = "SV Fellbach";
 
+  const main = document.createElement("main");
+  main.className = "site-main";
+  [...document.body.childNodes].forEach(node => {
+    if (node.nodeType === Node.ELEMENT_NODE && node.tagName === "SCRIPT") return;
+    if (node.nodeType === Node.TEXT_NODE && !node.textContent.trim()) return;
+    main.appendChild(node);
+  });
+
   // ---- Header ----
   const header = document.createElement("header");
   header.className = "site-header";
@@ -47,6 +55,7 @@ function renderChrome() {
       </nav>
     </div>`;
   document.body.prepend(header);
+  header.after(main);
 
   const burger = header.querySelector(".hamburger");
   const links = header.querySelector(".nav-links");

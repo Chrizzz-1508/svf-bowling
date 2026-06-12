@@ -358,7 +358,7 @@ async function renderResource(content, key) {
 
 function renderTable(res, items) {
   const drag = !!res.reorderEntity;
-  return `<table class="atable"><thead><tr>
+  return `<div class="atable-wrap"><table class="atable"><thead><tr>
       ${drag ? "<th></th>" : ""}${res.columns.map(c => `<th>${escapeHtml(c.label)}</th>`).join("")}<th></th>
     </tr></thead><tbody>
       ${items.map(it => `<tr data-id="${it.id}">
@@ -368,7 +368,7 @@ function renderTable(res, items) {
           <button class="btn btn-sm btn-neutral" data-edit="${it.id}">Bearbeiten</button>
           <button class="btn btn-sm btn-danger" data-del="${it.id}">Löschen</button>
         </div></td></tr>`).join("")}
-    </tbody></table>`;
+    </tbody></table></div>`;
 }
 
 // ---- Drag & Drop Sortierung ----
@@ -676,11 +676,11 @@ async function renderDownloadsSection(content) {
     content.innerHTML = `
       <div class="toolbar"><button class="btn" id="dl-new">+ Datei hochladen</button>
         <div class="spacer"></div><span class="muted">${dls.length} Dateien</span></div>
-      ${dls.length ? `<table class="atable"><thead><tr><th>Titel</th><th>Datei</th><th>Kategorie</th><th></th></tr></thead><tbody>
+      ${dls.length ? `<div class="atable-wrap"><table class="atable"><thead><tr><th>Titel</th><th>Datei</th><th>Kategorie</th><th></th></tr></thead><tbody>
         ${dls.map(d => `<tr><td>${escapeHtml(d.title)}</td><td class="muted">${escapeHtml(d.fileName)}</td><td>${escapeHtml(d.category || "—")}</td>
           <td class="actions"><a class="btn btn-sm btn-neutral" href="${SVF.downloadUrl(d.id)}" target="_blank">Öffnen</a>
           <button class="btn btn-sm btn-danger" data-deldl="${d.id}">Löschen</button></td></tr>`).join("")}
-      </tbody></table>` : `<div class="empty">Noch keine Downloads.</div>`}`;
+      </tbody></table></div>` : `<div class="empty">Noch keine Downloads.</div>`}`;
     content.querySelector("#dl-new").addEventListener("click", openDownloadForm);
     content.querySelectorAll("[data-deldl]").forEach(b => b.addEventListener("click", async () => {
       if (!confirm("Datei wirklich löschen?")) return;
@@ -758,15 +758,18 @@ async function renderDashboard(content) {
     ]);
     content.innerHTML = `
       <p>Hallo <strong>${escapeHtml(user.username || "")}</strong>! Hier pflegst du die Inhalte der Vereinswebsite.</p>
-      <div class="grid grid-4" style="margin:1.2rem 0">
-        ${statCard("Berichte", news.length, "news")}
-        ${statCard("Ergebnis-Tabellen", standings.length, "standings")}
-        ${statCard("Termine", events.length, "events")}
+      <div class="admin-dashboard">
+        <div class="admin-stats grid grid-4">
+          ${statCard("Berichte", news.length, "news")}
+          ${statCard("Ergebnis-Tabellen", standings.length, "standings")}
+          ${statCard("Termine", events.length, "events")}
+        </div>
+        <div class="card admin-quickstart">
+          <h3 class="mt-0">Schnellstart</h3>
+          <p class="muted">Tipp: Lege zuerst eine <a href="#" data-go2="seasons">Saison</a> an, dann <a href="#" data-go2="standings">Ergebnis-Tabellen</a> und <a href="#" data-go2="news">Berichte</a>.</p>
+        </div>
       </div>
-      <div class="card" style="padding:1.2rem">
-        <h3 class="mt-0">Schnellstart</h3>
-        <p class="muted">Tipp: Lege zuerst eine <a href="#" data-go2="seasons">Saison</a> an, dann <a href="#" data-go2="standings">Ergebnis-Tabellen</a> und <a href="#" data-go2="news">Berichte</a>.</p>
-      </div>`;
+      `;
     content.querySelectorAll("[data-jump],[data-go2]").forEach(a => a.addEventListener("click", e => { e.preventDefault(); go(a.dataset.jump || a.dataset.go2); }));
   } catch (e) { content.innerHTML = `<div class="error-box">${escapeHtml(e.message)}</div>`; }
 }

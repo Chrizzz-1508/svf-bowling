@@ -37,6 +37,7 @@
 html { scroll-behavior: smooth; overflow-x: hidden; }
 body {
   margin: 0;
+  min-height: 100vh;
   font-family: var(--font);
   color: var(--color-ink);
   background: var(--color-bg);
@@ -44,6 +45,8 @@ body {
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }
+body[data-page] { display: flex; flex-direction: column; }
+body[data-page] .site-main { flex: 1 0 auto; width: 100%; }
 img { max-width: 100%; display: block; }
 a { color: var(--color-primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -365,7 +368,7 @@ table.data td.rank { font-weight: 800; color: var(--color-primary-dark); width: 
 .dl-item .grow { flex: 1; }
 
 /* ---------- Footer ---------- */
-.site-footer { background: #14171b; color: #aeb4bb; margin-top: 56px; }
+.site-footer { background: #14171b; color: #aeb4bb; margin-top: 0; flex: none; }
 .site-footer .container { padding-block: 44px; }
 .footer-grid { display: grid; gap: 2rem; grid-template-columns: 2fr 1fr 1fr; }
 .site-footer h4 { color: #fff; margin: 0 0 .8rem; font-size: .95rem; letter-spacing: 0; }
