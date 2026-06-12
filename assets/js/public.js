@@ -74,6 +74,23 @@ function externalNewsItem(item) {
   </li>`;
 }
 
+function externalNewsCard(item) {
+  const date = item.publishedAt ? formatDate(item.publishedAt) : "";
+  const source = item.sourceKey === "dbu" ? "DBU" : "WBV";
+  const url = escapeHtml(item.url || "#");
+  return `<article class="card">
+    <a href="${url}" class="thumb placeholder" target="_blank" rel="noopener noreferrer">
+      ${placeholderImage("news", source + " News")}
+    </a>
+    <div class="card-body">
+      <div class="meta">${source}${date ? " &middot; " + escapeHtml(date) : ""}</div>
+      <h3><a href="${url}" target="_blank" rel="noopener noreferrer" style="color:inherit">${escapeHtml(item.title)}</a></h3>
+      <p>${escapeHtml(item.summary || "")}</p>
+      <div class="card-foot"><a class="btn btn-sm btn-ghost" href="${url}" target="_blank" rel="noopener noreferrer">Zur Quelle</a></div>
+    </div>
+  </article>`;
+}
+
 // ---- Generische Ergebnis-Tabelle rendern ----
 function renderStandings(table, hideTitle) {
   let columns = [];
@@ -220,7 +237,11 @@ const PAGES = {
     let categories = [];
     try { categories = await SVF.get("/api/categories"); } catch { /* */ }
 
-    let externalMode = ["verband", "verbandsnews", "external"].includes((qs("category") || "").toLowerCase());
+    const feedParam = (qs("category") || "").toLowerCase();
+    let activeFeed = feedParam === "dbu"
+      ? "dbu"
+      : (["wbv", "wkbv", "verband", "verbandsnews", "external"].includes(feedParam) ? "wkbv" : null);
+    let externalMode = activeFeed !== null;
     let activeCat = externalMode ? null : (qs("category") ? parseInt(qs("category")) : null);
     let offset = 0;
 
@@ -228,9 +249,11 @@ const PAGES = {
       filterBox.innerHTML =
         `<button class="pill ${!externalMode && activeCat === null ? "active" : ""}" data-cat="">Alle</button>` +
         categories.map(c => `<button class="pill ${!externalMode && activeCat === c.id ? "active" : ""}" data-cat="${c.id}">${escapeHtml(c.name)}</button>`).join("") +
-        `<button class="pill ${externalMode ? "active" : ""}" data-feed="external">WKBV / DBU</button>`;
+        `<button class="pill ${externalMode && activeFeed === "wkbv" ? "active" : ""}" data-feed="wkbv">WBV</button>` +
+        `<button class="pill ${externalMode && activeFeed === "dbu" ? "active" : ""}" data-feed="dbu">DBU</button>`;
       filterBox.querySelectorAll(".pill").forEach(p => p.addEventListener("click", () => {
-        externalMode = p.dataset.feed === "external";
+        activeFeed = p.dataset.feed || null;
+        externalMode = activeFeed !== null;
         activeCat = externalMode ? null : (p.dataset.cat ? parseInt(p.dataset.cat) : null);
         offset = 0;
         renderPills(); load(true);
@@ -270,6 +293,13 @@ const PAGES = {
       try {
         const data = await SVF.get("/api/external-news");
         const sources = data.sources || [];
+        const source = sources.find(s => s.key === activeFeed);
+        const items = source && source.items ? source.items : [];
+        listEl.innerHTML = items.length
+          ? items.map(externalNewsCard).join("") +
+            `<div class="feed-legal-note">Externe Verbandsmeldungen werden hier nur als kurze Teaser mit Quellenlink angezeigt. Die vollständigen Inhalte liegen bei der jeweiligen Quelle.</div>`
+          : `<div class="empty" style="grid-column:1/-1">Aktuell keine ${activeFeed === "dbu" ? "DBU" : "WBV"}-News verfügbar.</div>`;
+        return;
         listEl.innerHTML = sources.length
           ? sources.map(externalNewsSourceCard).join("") +
             `<div class="feed-legal-note">Externe Verbandsmeldungen werden hier nur als kurze Teaser mit Quellenlink angezeigt. Die vollständigen Inhalte liegen bei WKBV und DBU.</div>`
