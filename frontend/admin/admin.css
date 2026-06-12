@@ -43,7 +43,9 @@
 .atable th, .atable td { padding: .7rem .9rem; text-align: left; border-bottom: 1px solid var(--color-border); vertical-align: middle; }
 .atable thead th { background: #fafbfc; font-size: .8rem; text-transform: uppercase; letter-spacing: 0; color: var(--color-muted); }
 .atable tbody tr:hover { background: var(--color-bg-alt); }
-.atable .actions { display: flex; gap: .4rem; justify-content: flex-end; }
+/* Aktions-Buttons: inline-flex im Zellinneren, damit die Zeilenhöhe nicht bricht */
+.atable td.actions-cell { text-align: right; white-space: nowrap; width: 1%; }
+.atable .actions { display: inline-flex; gap: .4rem; vertical-align: middle; }
 .atable .tag { font-size: .75rem; font-weight: 700; padding: .15rem .5rem; border-radius: var(--radius-sm); background: #eceef1; }
 .atable .tag.on { background: #dff3e7; color: var(--color-success); }
 .atable .tag.off { background: #ffe1e6; color: var(--color-primary-dark); }
@@ -91,3 +93,15 @@
   .admin-side.open { transform: translateX(0); }
   .admin-burger { display: block; }
 }
+
+/* ---- Drag & Drop Sortierung ---- */
+.atable td.drag-cell { width: 34px; text-align: center; }
+.drag-handle { cursor: grab; color: var(--color-muted); font-size: 1.1rem; user-select: none; padding: .2rem .35rem; display: inline-block; }
+.drag-handle:active { cursor: grabbing; }
+tr.dragging { opacity: .45; background: #fdeef0 !important; }
+
+/* ---- Rich-Text-Editor (Quill) ---- */
+.rte-host { background: #fff; min-height: 220px; }
+.field .ql-toolbar { border-radius: var(--radius-sm) var(--radius-sm) 0 0; border-color: var(--color-border); }
+.field .ql-container { border-radius: 0 0 var(--radius-sm) var(--radius-sm); border-color: var(--color-border); font-size: 1rem; font-family: inherit; min-height: 220px; }
+.ql-editor { min-height: 220px; }

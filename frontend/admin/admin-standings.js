@@ -19,15 +19,18 @@ async function renderStandingsSection(content) {
         <button class="btn" id="new-table">+ Neue Tabelle</button>
         <div class="spacer"></div><span class="muted">${tables.length} Tabellen</span>
       </div>
-      ${tables.length ? `<table class="atable"><thead><tr><th>Titel</th><th>Typ</th><th>Saison</th><th>Status</th><th></th></tr></thead><tbody>
-        ${tables.map(t => `<tr>
+      ${tables.length > 1 ? `<p class="muted" style="font-size:.85rem">↕ Tabellen per Drag&nbsp;&amp;&nbsp;Drop am Griff sortieren.</p>` : ""}
+      ${tables.length ? `<table class="atable"><thead><tr><th></th><th>Titel</th><th>Typ</th><th>Saison</th><th>Status</th><th></th></tr></thead><tbody>
+        ${tables.map(t => `<tr data-id="${t.id}">
+          <td class="drag-cell"><span class="drag-handle" title="Ziehen zum Sortieren">⠿</span></td>
           <td>${escapeHtml(t.title)}</td><td>${escapeHtml(t.type)}</td><td>${escapeHtml(seasonName(t.seasonId))}</td>
           <td>${tag(t.isPublished, "Sichtbar", "Versteckt")}</td>
-          <td class="actions">
+          <td class="actions-cell"><div class="actions">
             <button class="btn btn-sm btn-neutral" data-edit="${t.id}">Bearbeiten</button>
             <button class="btn btn-sm btn-danger" data-del="${t.id}">Löschen</button>
-          </td></tr>`).join("")}
+          </div></td></tr>`).join("")}
       </tbody></table>` : `<div class="empty">Noch keine Ergebnis-Tabellen. Lege die erste an.</div>`}`;
+    initDragSort(content.querySelector(".atable tbody"), "standings");
 
     content.querySelector("#new-table").addEventListener("click", () => openStandingsEditor(null, seasons));
     content.querySelectorAll("[data-edit]").forEach(b => b.addEventListener("click", async () => {
@@ -65,7 +68,6 @@ async function openStandingsEditor(table, seasons) {
     <div class="row">
       <div class="field"><label>Typ</label><select id="st-type">${typeOpts}</select></div>
       <div class="field"><label>Saison</label><select id="st-season">${seasonOpts}</select></div>
-      <div class="field"><label>Sortierung</label><input type="number" id="st-sort" value="${isEdit ? (table.sortOrder || 0) : 0}"></div>
     </div>
     <div class="field"><label class="check"><input type="checkbox" id="st-pub" ${(!isEdit || table.isPublished) ? "checked" : ""}> Sichtbar auf der Website</label></div>
 
@@ -144,12 +146,21 @@ async function openStandingsEditor(table, seasons) {
     const title = m.querySelector("#st-title").value.trim();
     if (!title) { toast("Bitte einen Titel angeben.", "err"); return; }
     if (!cols.length) { toast("Mindestens eine Spalte anlegen.", "err"); return; }
+    // Bestehende Tabellen behalten ihre Position; neue landen ganz oben
+    let sortOrder;
+    if (isEdit) {
+      sortOrder = table.sortOrder || 0;
+    } else {
+      const all = await SVF.get("/api/admin/standings").catch(() => []);
+      const sorts = all.map(t => t.sortOrder ?? 0);
+      sortOrder = (sorts.length ? Math.min(...sorts) : 0) - 1;
+    }
     const payload = {
       title,
       subtitle: m.querySelector("#st-sub").value || null,
       type: m.querySelector("#st-type").value,
       seasonId: m.querySelector("#st-season").value ? Number(m.querySelector("#st-season").value) : null,
-      sortOrder: Number(m.querySelector("#st-sort").value) || 0,
+      sortOrder,
       isPublished: m.querySelector("#st-pub").checked,
       columnsJson: JSON.stringify(cols.map(c => ({ key: c.key, label: c.label, type: c.type || "text" }))),
       rows: rows.map((r, i) => ({ position: i + 1, sortOrder: i, valuesJson: JSON.stringify(r.values || {}) }))

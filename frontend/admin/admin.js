@@ -501,7 +501,8 @@ function renderField(f, value, isEdit) {
     case "textarea":
       inner = `<textarea id="${id}" name="${f.name}" style="min-height:90px">${escapeHtml(value || "")}</textarea>`; break;
     case "html":
-      inner = `<textarea id="${id}" name="${f.name}" style="min-height:200px;font-family:monospace">${escapeHtml(value || "")}</textarea>`; break;
+      // Quill-Editor-Host – Inhalt wird in initRichEditors gesetzt und beim Speichern ausgelesen
+      inner = `<div class="rte-host" data-rte="${f.name}"></div>`; break;
     case "number":
       inner = `<input type="number" id="${id}" name="${f.name}" value="${value ?? ""}">`; break;
     case "checkbox":
@@ -526,6 +527,18 @@ function renderField(f, value, isEdit) {
 function readForm(fields, m) {
   const v = {};
   fields.forEach(f => {
+    if (f.type === "html") {
+      // Quill-Inhalt auslesen (oder Fallback-Textarea)
+      const q = _quills[f.name];
+      if (q) {
+        const html = q.root.innerHTML;
+        v[f.name] = (q.getText().trim() === "" && !html.includes("<img")) ? null : html;
+      } else {
+        const ta = m.querySelector(`textarea[name="${f.name}"]`);
+        v[f.name] = ta && ta.value !== "" ? ta.value : null;
+      }
+      return;
+    }
     const el = m.querySelector(`[name="${f.name}"]`);
     if (!el) return;
     switch (f.type) {
