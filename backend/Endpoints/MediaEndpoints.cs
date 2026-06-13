@@ -7,7 +7,8 @@ namespace SvfBowling.Api.Endpoints;
 
 public static class MediaEndpoints
 {
-    private const long MaxUploadBytes = 15 * 1024 * 1024; // 15 MB
+    private const long MaxUploadBytes = 15 * 1024 * 1024; // 15 MB (Bilder/Downloads)
+    private const long MaxVideoBytes = 64 * 1024 * 1024;  // 64 MB (kurze Videoclips)
 
     public static void MapMediaEndpoints(this WebApplication app)
     {
@@ -45,10 +46,13 @@ public static class MediaEndpoints
             var form = await request.ReadFormAsync();
             var file = form.Files["file"];
             if (file is null || file.Length == 0) return Results.BadRequest(new { message = "Keine Datei übermittelt." });
-            if (file.Length > MaxUploadBytes) return Results.BadRequest(new { message = "Datei zu groß (max. 15 MB)." });
-            if (!file.ContentType.StartsWith("image/")) return Results.BadRequest(new { message = "Nur Bilddateien erlaubt." });
+            var isImage = file.ContentType.StartsWith("image/");
+            var isVideo = file.ContentType.StartsWith("video/");
+            if (!isImage && !isVideo) return Results.BadRequest(new { message = "Nur Bild- oder Videodateien erlaubt." });
+            var limit = isVideo ? MaxVideoBytes : MaxUploadBytes;
+            if (file.Length > limit) return Results.BadRequest(new { message = $"Datei zu groß (max. {limit / 1024 / 1024} MB)." });
 
-            using var ms = new MemoryStream();
+            using var ms = new MemoryStream(file.Length > 0 ? (int)file.Length : 0);
             await file.CopyToAsync(ms);
 
             var img = new Image
@@ -107,7 +111,7 @@ public static class MediaEndpoints
             if (album is null) return Results.NotFound();
             var images = await db.Images.Where(i => i.AlbumId == id)
                 .OrderBy(i => i.SortOrder).ThenBy(i => i.Id)
-                .Select(i => new { i.Id, i.AltText, i.FileName }).ToListAsync();
+                .Select(i => new { i.Id, i.AltText, i.FileName, i.ContentType }).ToListAsync();
             return Results.Ok(new { album, images });
         }).WithTags("Galerie");
 

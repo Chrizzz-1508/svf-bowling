@@ -15,6 +15,14 @@ var port = Environment.GetEnvironmentVariable("PORT");
 if (!string.IsNullOrWhiteSpace(port))
     builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
+// Upload-Limit anheben (kurze Videoclips bis ~64 MB); Standard wäre ~30 MB.
+const long MaxRequestBytes = 80L * 1024 * 1024;
+builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = MaxRequestBytes);
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
+{
+    o.MultipartBodyLengthLimit = MaxRequestBytes;
+});
+
 // ---------------- Konfiguration (Env-Variablen überschreiben appsettings) ----------------
 var databaseUrl = config["DATABASE_URL"];
 var jwtSecret = config["JWT_SECRET"];

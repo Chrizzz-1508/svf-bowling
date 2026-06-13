@@ -16,6 +16,21 @@ public static class ContentEndpoints
         MapSettings(app);
     }
 
+    /// <summary>UTC-Zeitpunkt von Mitternacht des heutigen Tages in deutscher Zeit.</summary>
+    private static DateTime GermanMidnightUtc()
+    {
+        TimeZoneInfo tz;
+        try { tz = TimeZoneInfo.FindSystemTimeZoneById("Europe/Berlin"); }
+        catch
+        {
+            try { tz = TimeZoneInfo.FindSystemTimeZoneById("W. Europe Standard Time"); }
+            catch { tz = TimeZoneInfo.Utc; }
+        }
+        var localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
+        var localMidnight = DateTime.SpecifyKind(localNow.Date, DateTimeKind.Unspecified);
+        return TimeZoneInfo.ConvertTimeToUtc(localMidnight, tz);
+    }
+
     // ---------------- Saisons ----------------
     private static void MapSeasons(WebApplication app)
     {
@@ -170,7 +185,13 @@ public static class ContentEndpoints
         app.MapGet("/api/events", async (AppDbContext db, bool? upcoming) =>
         {
             var q = db.Events.Where(e => e.IsPublished);
-            if (upcoming == true) q = q.Where(e => (e.EndDate ?? e.StartDate) >= DateTime.UtcNow.Date);
+            if (upcoming == true)
+            {
+                // "Heute" in deutscher Zeit (nicht UTC), sonst gilt ein Termin nach
+                // Mitternacht MEZ noch als "heute", weil es in UTC noch der Vortag ist.
+                var todayDe = GermanMidnightUtc();
+                q = q.Where(e => (e.EndDate ?? e.StartDate) >= todayDe);
+            }
             return Results.Ok(await q.OrderBy(e => e.StartDate).ToListAsync());
         }).WithTags("Termine");
 

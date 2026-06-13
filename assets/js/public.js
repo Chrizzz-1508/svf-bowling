@@ -554,9 +554,14 @@ const PAGES = {
         <a href="galerie.html" class="muted">← Alle Alben</a>
         <h1 style="margin-top:.5rem">${escapeHtml(album.title)}</h1>
         ${album.description ? `<p class="muted">${escapeHtml(album.description)}</p>` : ""}
-        ${images.length ? `<div class="gallery-grid">${images.map(i =>
-          `<img src="${SVF.imageUrl(i.id)}" alt="${escapeHtml(i.altText || album.title)}" data-full="${SVF.imageUrl(i.id)}">`).join("")}</div>`
-          : `<div class="empty">Noch keine Bilder in diesem Album.</div>`}`;
+        ${images.length ? `<div class="gallery-grid">${images.map(i => {
+          const url = SVF.imageUrl(i.id);
+          const isVideo = (i.contentType || "").startsWith("video/");
+          return isVideo
+            ? `<div class="gallery-video" data-video="${url}" title="Video abspielen"><video src="${url}#t=0.1" muted playsinline preload="metadata"></video><span class="play-badge" aria-hidden="true">▶</span></div>`
+            : `<img src="${url}" alt="${escapeHtml(i.altText || album.title)}" data-full="${url}">`;
+        }).join("")}</div>`
+          : `<div class="empty">Noch keine Bilder oder Videos in diesem Album.</div>`}`;
       initLightbox();
     } catch (e) { showError(box, e.message); }
   },
@@ -709,12 +714,20 @@ function initLightbox() {
   if (!lb) {
     lb = document.createElement("div");
     lb.className = "lightbox";
-    lb.innerHTML = `<button class="close" aria-label="Schließen">×</button><img alt="">`;
+    lb.innerHTML = `<button class="close" aria-label="Schließen">×</button><div class="lb-stage"></div>`;
     document.body.appendChild(lb);
-    lb.addEventListener("click", e => { if (e.target === lb || e.target.classList.contains("close")) lb.classList.remove("open"); });
+    lb.addEventListener("click", e => { if (e.target === lb || e.target.classList.contains("close")) closeLightbox(lb); });
   }
-  document.querySelectorAll("[data-full]").forEach(img =>
-    img.addEventListener("click", () => { lb.querySelector("img").src = img.dataset.full; lb.classList.add("open"); }));
+  const stage = lb.querySelector(".lb-stage");
+  document.querySelectorAll("[data-full]").forEach(el =>
+    el.addEventListener("click", () => { stage.innerHTML = `<img src="${el.dataset.full}" alt="">`; lb.classList.add("open"); }));
+  document.querySelectorAll("[data-video]").forEach(el =>
+    el.addEventListener("click", () => { stage.innerHTML = `<video src="${el.dataset.video}" controls autoplay playsinline></video>`; lb.classList.add("open"); }));
+}
+function closeLightbox(lb) {
+  lb.classList.remove("open");
+  const v = lb.querySelector("video"); if (v) v.pause();
+  const stage = lb.querySelector(".lb-stage"); if (stage) stage.innerHTML = "";
 }
 
 // Lade-Gate: Inhalte erst einblenden, wenn Chrome (Einstellungen) UND der

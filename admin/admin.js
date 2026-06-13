@@ -163,6 +163,9 @@ const RESOURCES = {
   },
   pages: {
     title: "Seiten", singular: "Seite", newLabel: "Neue Seite", base: "/api/admin/pages",
+    // Startseite/Verein sind kuratiert und werden hier bewusst ausgeblendet –
+    // editierbar bleiben nur Impressum und Datenschutz.
+    listFilter: p => p.slug === "impressum" || p.slug === "datenschutz",
     columns: [
       { label: "Titel", render: p => escapeHtml(p.title) },
       { label: "Slug", render: p => escapeHtml(p.slug) },
@@ -170,7 +173,7 @@ const RESOURCES = {
     ],
     fields: [
       { name: "title", label: "Titel", type: "text", required: true },
-      { name: "slug", label: "Slug", type: "text", hint: "z. B. startseite, verein, impressum, datenschutz" },
+      { name: "slug", label: "Slug", type: "text", hint: "z. B. impressum, datenschutz" },
       { name: "contentHtml", label: "Inhalt", type: "html", required: true, hint: "Text direkt mit der Werkzeugleiste formatieren. HTML-Kenntnisse sind nicht nötig." }
     ]
   },
@@ -339,7 +342,8 @@ async function renderResource(content, key) {
   // Caches vorladen, die für Spaltenanzeige gebraucht werden
   if (key === "players") await loadTeams();
   try {
-    const items = await SVF.get(res.base);
+    let items = await SVF.get(res.base);
+    if (res.listFilter) items = items.filter(res.listFilter);
     state.currentItems = items;
     content.innerHTML = `
       <div class="toolbar">
@@ -494,7 +498,7 @@ function initRichEditors(m, fields, data) {
           [{ color: [] }, { background: [] }],
           [{ list: "ordered" }, { list: "bullet" }],
           [{ align: [] }],
-          ["link", "blockquote"],
+          ["link", "video", "blockquote"],
           ["clean"]
         ]
       }
@@ -657,19 +661,26 @@ async function renderImagesSection(content) {
     const albumOpts = `<option value="">– kein Album –</option>` + albums.map(a => `<option value="${a.id}">${escapeHtml(a.title)}</option>`).join("");
     content.innerHTML = `
       <div class="toolbar">
-        <label class="btn">+ Bild hochladen<input type="file" accept="image/*" id="up" hidden></label>
+        <label class="btn">+ Bild/Video hochladen<input type="file" accept="image/*,video/*" id="up" hidden></label>
         <label class="field" style="margin:0">Hochladen in Album:
           <select id="up-album" style="margin-left:.4rem">${albumOpts}</select></label>
-        <div class="spacer"></div><span class="muted">${imgs.length} Bilder</span>
+        <div class="spacer"></div><span class="muted">${imgs.length} Medien</span>
       </div>
-      <div class="gallery-grid" id="imgs">${imgs.map(i => `
-        <div class="card" style="overflow:visible">
-          <div class="thumb" style="aspect-ratio:1;background-image:url('${SVF.imageUrl(i.id)}')"></div>
+      <p class="hint" style="margin:-.4rem 0 1rem">Bilder bis 15 MB, Videoclips bis 64 MB. Für lange Videos lieber einen Bericht mit YouTube-Link nutzen.</p>
+      <div class="gallery-grid" id="imgs">${imgs.map(i => {
+        const url = SVF.imageUrl(i.id);
+        const isVideo = (i.contentType || "").startsWith("video/");
+        const media = isVideo
+          ? `<video src="${url}" preload="metadata" muted controls></video>`
+          : `<img src="${url}" alt="">`;
+        return `<div class="card" style="overflow:visible">
+          <div class="thumb">${media}</div>
           <div class="card-body" style="padding:.6rem;gap:.4rem">
             <select data-album="${i.id}" style="font-size:.85rem;padding:.3rem">${albumOpts}</select>
             <button class="btn btn-sm btn-danger" data-delimg="${i.id}">Löschen</button>
           </div>
-        </div>`).join("") || `<div class="empty" style="grid-column:1/-1">Noch keine Bilder.</div>`}</div>`;
+        </div>`;
+      }).join("") || `<div class="empty" style="grid-column:1/-1">Noch keine Medien.</div>`}</div>`;
 
     // Albumzuordnung vorauswählen
     imgs.forEach(i => { const sel = content.querySelector(`[data-album="${i.id}"]`); if (sel) sel.value = i.albumId ?? ""; });
