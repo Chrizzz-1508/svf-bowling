@@ -78,10 +78,13 @@ function externalNewsCard(item) {
   const date = item.publishedAt ? formatDate(item.publishedAt) : "";
   const source = item.sourceKey === "dbu" ? "DBU" : "WBV";
   const url = escapeHtml(item.url || "#");
+  // Vorschaubild aus dem Verbands-Artikel; bei Ladefehler -> Platzhaltergrafik.
+  const img = item.imageUrl ? escapeHtml(item.imageUrl) : null;
+  const thumb = img
+    ? `<a href="${url}" class="thumb" target="_blank" rel="noopener noreferrer"><img src="${img}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='assets/img/news.png';this.style.maxWidth='60%';this.style.opacity='.9'"></a>`
+    : `<a href="${url}" class="thumb placeholder" target="_blank" rel="noopener noreferrer">${placeholderImage("news", source + " News")}</a>`;
   return `<article class="card">
-    <a href="${url}" class="thumb placeholder" target="_blank" rel="noopener noreferrer">
-      ${placeholderImage("news", source + " News")}
-    </a>
+    ${thumb}
     <div class="card-body">
       <div class="meta">${source}${date ? " &middot; " + escapeHtml(date) : ""}</div>
       <h3><a href="${url}" target="_blank" rel="noopener noreferrer" style="color:inherit">${escapeHtml(item.title)}</a></h3>

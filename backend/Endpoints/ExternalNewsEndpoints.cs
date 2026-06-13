@@ -62,13 +62,19 @@ public static class ExternalNewsEndpoints
         {
             return doc.Descendants()
                 .Where(e => e.Name.LocalName == "item")
-                .Select(item => new ExternalNewsItem(
-                    source.Key,
-                    source.Name,
-                    CleanText(GetChildValue(item, "title")),
-                    AbsoluteUrl(GetChildValue(item, "link"), source.SiteUrl),
-                    ParseDate(GetChildValue(item, "pubDate") ?? GetChildValue(item, "date")),
-                    TrimSummary(CleanText(GetChildValue(item, "description")))))
+                .Select(item =>
+                {
+                    // content:encoded (falls vorhanden) ist meist bildreicher als description.
+                    var desc = GetChildValue(item, "encoded") ?? GetChildValue(item, "description");
+                    return new ExternalNewsItem(
+                        source.Key,
+                        source.Name,
+                        CleanText(GetChildValue(item, "title")),
+                        AbsoluteUrl(GetChildValue(item, "link"), source.SiteUrl),
+                        ParseDate(GetChildValue(item, "pubDate") ?? GetChildValue(item, "date")),
+                        TrimSummary(CleanText(GetChildValue(item, "description") ?? desc)),
+                        ExtractFirstImage(desc, source.SiteUrl));
+                })
                 .Where(i => !string.IsNullOrWhiteSpace(i.Title) && !string.IsNullOrWhiteSpace(i.Url));
         }
 
@@ -76,13 +82,18 @@ public static class ExternalNewsEndpoints
         {
             return doc.Descendants()
                 .Where(e => e.Name.LocalName == "entry")
-                .Select(entry => new ExternalNewsItem(
-                    source.Key,
-                    source.Name,
-                    CleanText(GetChildValue(entry, "title")),
-                    AbsoluteUrl(GetAtomLink(entry), source.SiteUrl),
-                    ParseDate(GetChildValue(entry, "updated") ?? GetChildValue(entry, "published")),
-                    TrimSummary(CleanText(GetChildValue(entry, "summary") ?? GetChildValue(entry, "content")))))
+                .Select(entry =>
+                {
+                    var content = GetChildValue(entry, "content") ?? GetChildValue(entry, "summary");
+                    return new ExternalNewsItem(
+                        source.Key,
+                        source.Name,
+                        CleanText(GetChildValue(entry, "title")),
+                        AbsoluteUrl(GetAtomLink(entry), source.SiteUrl),
+                        ParseDate(GetChildValue(entry, "updated") ?? GetChildValue(entry, "published")),
+                        TrimSummary(CleanText(GetChildValue(entry, "summary") ?? GetChildValue(entry, "content"))),
+                        ExtractFirstImage(content, source.SiteUrl));
+                })
                 .Where(i => !string.IsNullOrWhiteSpace(i.Title) && !string.IsNullOrWhiteSpace(i.Url));
         }
 
@@ -112,6 +123,22 @@ public static class ExternalNewsEndpoints
         return null;
     }
 
+    /// <summary>Erstes echtes &lt;img&gt; aus dem (HTML-)Beschreibungstext als absolute URL.</summary>
+    private static string? ExtractFirstImage(string? html, string baseUrl)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return null;
+        foreach (Match m in Regex.Matches(html, "<img[^>]+?src\\s*=\\s*[\"']([^\"']+)[\"']", RegexOptions.IgnoreCase))
+        {
+            var src = WebUtility.HtmlDecode(m.Groups[1].Value).Trim();
+            if (string.IsNullOrWhiteSpace(src) || src.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) continue;
+            // Offensichtliche Platzhalter/Icons überspringen.
+            if (Regex.IsMatch(src, "(spacer|pixel|blank|1x1|emoji|smiley)", RegexOptions.IgnoreCase)) continue;
+            var abs = AbsoluteUrl(src, baseUrl);
+            if (abs is not null) return abs;
+        }
+        return null;
+    }
+
     private static string CleanText(string? html)
     {
         if (string.IsNullOrWhiteSpace(html)) return "";
@@ -130,5 +157,5 @@ public static class ExternalNewsEndpoints
     private sealed record SourceConfig(string Key, string Name, string SiteUrl, string FeedUrl);
     public sealed record ExternalNewsResponse(DateTimeOffset GeneratedAt, IReadOnlyList<ExternalNewsSource> Sources);
     public sealed record ExternalNewsSource(string Key, string Name, string Url, IReadOnlyList<ExternalNewsItem> Items, string? Error);
-    public sealed record ExternalNewsItem(string SourceKey, string SourceName, string Title, string? Url, DateTimeOffset? PublishedAt, string? Summary);
+    public sealed record ExternalNewsItem(string SourceKey, string SourceName, string Title, string? Url, DateTimeOffset? PublishedAt, string? Summary, string? ImageUrl);
 }
