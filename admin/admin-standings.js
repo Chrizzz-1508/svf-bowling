@@ -17,10 +17,11 @@ async function renderStandingsSection(content) {
   try {
     const [tables, seasons] = await Promise.all([SVF.get("/api/admin/standings"), loadSeasons()]);
     const seasonName = id => { const s = seasons.find(x => x.id === id); return s ? s.name : "—"; };
+    // Neueste zuerst: nach Name absteigend (z. B. 2025/26 vor 2024/25).
     const sortedSeasons = [...seasons].sort((a, b) =>
-      (b.sortOrder || 0) - (a.sortOrder || 0) || b.name.localeCompare(a.name, "de-DE", { numeric: true }));
+      b.name.localeCompare(a.name, "de-DE", { numeric: true }));
 
-    // Standard: neueste Saison (aktuelle, sonst oberste) vorausgewählt
+    // Standard: aktuelle Saison vorausgewählt (sonst die neueste).
     if (standingsSeasonFilter === null) {
       const newest = seasons.find(s => s.isCurrent) || sortedSeasons[0];
       standingsSeasonFilter = newest ? String(newest.id) : "";
