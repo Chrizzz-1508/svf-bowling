@@ -222,21 +222,50 @@ function toast(msg, type = "ok") {
 //  Modal
 // ---------------------------------------------------------------------------
 function openModal(title, bodyHtml, footHtml, wide) {
-  closeModal();
+  // Kein closeModal() hier -> Modals sind stapelbar (z. B. Bildbibliothek ÜBER dem
+  // Bericht-Formular). Sonst würde das Auswählen eines Titelbilds das Formular zerstören.
   const m = document.createElement("div");
   m.className = "modal open";
-  m.id = "modal";
   m.innerHTML = `<div class="modal-card ${wide ? "wide" : ""}">
     <div class="modal-head"><h2>${escapeHtml(title)}</h2><button class="close" aria-label="Schließen">×</button></div>
     <div class="modal-body">${bodyHtml}</div>
     ${footHtml ? `<div class="modal-foot">${footHtml}</div>` : ""}
   </div>`;
   document.body.appendChild(m);
-  m.querySelector(".close").addEventListener("click", closeModal);
-  m.addEventListener("click", e => { if (e.target === m) closeModal(); });
+  m.querySelector(".close").addEventListener("click", () => closeModal(m));
+  m.addEventListener("click", e => { if (e.target === m) closeModal(m); });
   return m;
 }
-function closeModal() { const m = document.getElementById("modal"); if (m) m.remove(); }
+// Schließt das angegebene Modal – oder ohne (gültiges) Argument das oberste.
+// Robust gegen versehentlich übergebene Event-Objekte (z. B. addEventListener("click", closeModal)).
+function closeModal(m) {
+  const el = (m instanceof HTMLElement && m.classList.contains("modal")) ? m : null;
+  const modals = document.querySelectorAll(".modal");
+  const target = el || modals[modals.length - 1];
+  if (target) target.remove();
+}
+
+// Bild/Video per Klick groß anzeigen (Lightbox im Admin).
+function openAdminLightbox(src, isVideo) {
+  let lb = document.querySelector(".admin-lightbox");
+  if (!lb) {
+    lb = document.createElement("div");
+    lb.className = "lightbox admin-lightbox";
+    lb.innerHTML = `<button class="close" aria-label="Schließen">×</button><div class="lb-stage"></div>`;
+    document.body.appendChild(lb);
+    lb.addEventListener("click", e => {
+      if (e.target === lb || e.target.classList.contains("close")) {
+        lb.classList.remove("open");
+        const v = lb.querySelector("video"); if (v) v.pause();
+        lb.querySelector(".lb-stage").innerHTML = "";
+      }
+    });
+  }
+  lb.querySelector(".lb-stage").innerHTML = isVideo
+    ? `<video src="${src}" controls autoplay playsinline></video>`
+    : `<img src="${src}" alt="">`;
+  lb.classList.add("open");
+}
 
 // ---------------------------------------------------------------------------
 //  Auth / Init
@@ -672,9 +701,9 @@ async function renderImagesSection(content) {
         const isVideo = (i.contentType || "").startsWith("video/");
         const media = isVideo
           ? `<video src="${url}" preload="metadata" muted controls></video>`
-          : `<img src="${url}" alt="">`;
+          : `<img src="${url}" alt="" loading="lazy">`;
         return `<div class="card" style="overflow:visible">
-          <div class="thumb">${media}</div>
+          <div class="thumb ${isVideo ? "" : "img-zoom"}" ${isVideo ? "" : `data-zoom="${url}" title="Zum Vergrößern klicken"`}>${media}</div>
           <div class="card-body" style="padding:.6rem;gap:.4rem">
             <select data-album="${i.id}" style="font-size:.85rem;padding:.3rem">${albumOpts}</select>
             <button class="btn btn-sm btn-danger" data-delimg="${i.id}">Löschen</button>
@@ -684,6 +713,10 @@ async function renderImagesSection(content) {
 
     // Albumzuordnung vorauswählen
     imgs.forEach(i => { const sel = content.querySelector(`[data-album="${i.id}"]`); if (sel) sel.value = i.albumId ?? ""; });
+
+    // Klick aufs Bild -> vergrößern
+    content.querySelectorAll(".img-zoom").forEach(el =>
+      el.addEventListener("click", () => openAdminLightbox(el.dataset.zoom, false)));
 
     content.querySelector("#up").addEventListener("change", async e => {
       const file = e.target.files[0]; if (!file) return;

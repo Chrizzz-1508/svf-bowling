@@ -196,3 +196,7 @@ tr.dragging { opacity: .45; background: #fdeef0 !important; }
 
 /* ---- Eingebettete Videos im Editor responsive ---- */
 .ql-editor iframe, .ql-editor .ql-video { width: 100%; aspect-ratio: 16/9; height: auto; border: 0; }
+
+/* ---- Bild vergrößern (Admin-Lightbox) ---- */
+.img-zoom { cursor: zoom-in; }
+.admin-lightbox { z-index: 300; }   /* über Modals (100) und Toasts (200) */
