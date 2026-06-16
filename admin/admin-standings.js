@@ -10,38 +10,77 @@ function slugKey(label) {
     .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || ("spalte_" + Math.random().toString(36).slice(2, 6));
 }
 
+// Gewählter Saison-Filter (bleibt während der Sitzung erhalten); null = noch nicht gesetzt.
+let standingsSeasonFilter = null;
+
 async function renderStandingsSection(content) {
   try {
     const [tables, seasons] = await Promise.all([SVF.get("/api/admin/standings"), loadSeasons()]);
     const seasonName = id => { const s = seasons.find(x => x.id === id); return s ? s.name : "—"; };
+    const sortedSeasons = [...seasons].sort((a, b) =>
+      (b.sortOrder || 0) - (a.sortOrder || 0) || b.name.localeCompare(a.name, "de-DE", { numeric: true }));
+
+    // Standard: neueste Saison (aktuelle, sonst oberste) vorausgewählt
+    if (standingsSeasonFilter === null) {
+      const newest = seasons.find(s => s.isCurrent) || sortedSeasons[0];
+      standingsSeasonFilter = newest ? String(newest.id) : "";
+    }
+    // Fällt der Filter auf eine nicht mehr existierende Saison, auf "Alle" zurück
+    if (standingsSeasonFilter && standingsSeasonFilter !== "none" &&
+        !seasons.some(s => String(s.id) === standingsSeasonFilter)) {
+      standingsSeasonFilter = "";
+    }
+
+    const options = `<option value="">Alle Saisons</option>` +
+      sortedSeasons.map(s => `<option value="${s.id}" ${String(s.id) === standingsSeasonFilter ? "selected" : ""}>${escapeHtml(s.name)}</option>`).join("") +
+      `<option value="none" ${standingsSeasonFilter === "none" ? "selected" : ""}>Ohne Saison</option>`;
+
     content.innerHTML = `
       <div class="toolbar">
         <button class="btn" id="new-table">+ Neue Tabelle</button>
-        <div class="spacer"></div><span class="muted">${tables.length} Tabellen</span>
+        <label class="select-wrap" title="Nach Saison filtern"><select id="st-season">${options}</select></label>
+        <div class="spacer"></div><span class="muted" id="st-count"></span>
       </div>
-      ${tables.length > 1 ? `<p class="muted" style="font-size:.85rem">↕ Tabellen per Drag&nbsp;&amp;&nbsp;Drop am Griff sortieren.</p>` : ""}
-      ${tables.length ? `<div class="atable-wrap"><table class="atable"><thead><tr><th></th><th>Titel</th><th>Typ</th><th>Saison</th><th>Status</th><th></th></tr></thead><tbody>
-        ${tables.map(t => `<tr data-id="${t.id}">
-          <td class="drag-cell"><span class="drag-handle" title="Ziehen zum Sortieren">⠿</span></td>
-          <td>${escapeHtml(t.title)}</td><td>${escapeHtml(t.type)}</td><td>${escapeHtml(seasonName(t.seasonId))}</td>
-          <td>${tag(t.isPublished, "Sichtbar", "Versteckt")}</td>
-          <td class="actions-cell"><div class="actions">
-            <button class="btn btn-sm btn-neutral" data-edit="${t.id}">Bearbeiten</button>
-            <button class="btn btn-sm btn-danger" data-del="${t.id}">Löschen</button>
-          </div></td></tr>`).join("")}
-      </tbody></table></div>` : `<div class="empty">Noch keine Ergebnis-Tabellen. Lege die erste an.</div>`}`;
-    initDragSort(content.querySelector(".atable tbody"), "standings");
+      <div id="st-list"></div>`;
+
+    const renderList = () => {
+      const filtered = standingsSeasonFilter === ""
+        ? tables
+        : standingsSeasonFilter === "none"
+          ? tables.filter(t => !t.seasonId)
+          : tables.filter(t => String(t.seasonId) === standingsSeasonFilter);
+
+      content.querySelector("#st-count").textContent = `${filtered.length} Tabelle${filtered.length === 1 ? "" : "n"}`;
+      const list = content.querySelector("#st-list");
+      list.innerHTML = filtered.length
+        ? `${filtered.length > 1 ? `<p class="muted" style="font-size:.85rem">↕ Tabellen per Drag&nbsp;&amp;&nbsp;Drop am Griff sortieren.</p>` : ""}
+          <div class="atable-wrap"><table class="atable"><thead><tr><th></th><th>Titel</th><th>Typ</th><th>Saison</th><th>Status</th><th></th></tr></thead><tbody>
+          ${filtered.map(t => `<tr data-id="${t.id}">
+            <td class="drag-cell"><span class="drag-handle" title="Ziehen zum Sortieren">⠿</span></td>
+            <td>${escapeHtml(t.title)}</td><td>${escapeHtml(t.type)}</td><td>${escapeHtml(seasonName(t.seasonId))}</td>
+            <td>${tag(t.isPublished, "Sichtbar", "Versteckt")}</td>
+            <td class="actions-cell"><div class="actions">
+              <button class="btn btn-sm btn-neutral" data-edit="${t.id}">Bearbeiten</button>
+              <button class="btn btn-sm btn-danger" data-del="${t.id}">Löschen</button>
+            </div></td></tr>`).join("")}
+        </tbody></table></div>`
+        : `<div class="empty">Keine Tabellen für diese Auswahl.</div>`;
+
+      initDragSort(list.querySelector(".atable tbody"), "standings");
+      list.querySelectorAll("[data-edit]").forEach(b => b.addEventListener("click", async () => {
+        const full = await SVF.get(`/api/admin/standings/${b.dataset.edit}`);
+        openStandingsEditor(full, seasons);
+      }));
+      list.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", async () => {
+        if (!confirm("Tabelle wirklich löschen?")) return;
+        try { await SVF.send("DELETE", `/api/admin/standings/${b.dataset.del}`); toast("Gelöscht."); go("standings"); }
+        catch (e) { toast(e.message, "err"); }
+      }));
+    };
 
     content.querySelector("#new-table").addEventListener("click", () => openStandingsEditor(null, seasons));
-    content.querySelectorAll("[data-edit]").forEach(b => b.addEventListener("click", async () => {
-      const full = await SVF.get(`/api/admin/standings/${b.dataset.edit}`);
-      openStandingsEditor(full, seasons);
-    }));
-    content.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", async () => {
-      if (!confirm("Tabelle wirklich löschen?")) return;
-      try { await SVF.send("DELETE", `/api/admin/standings/${b.dataset.del}`); toast("Gelöscht."); go("standings"); }
-      catch (e) { toast(e.message, "err"); }
-    }));
+    content.querySelector("#st-season").addEventListener("change", e => { standingsSeasonFilter = e.target.value; renderList(); });
+    renderList();
   } catch (e) { content.innerHTML = `<div class="error-box">${escapeHtml(e.message)}</div>`; }
 }
 
