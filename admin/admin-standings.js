@@ -114,8 +114,7 @@ async function openStandingsEditor(table, seasons) {
     <hr style="border:none;border-top:1px solid var(--color-border);margin:1rem 0">
     <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem">
       <strong>Spalten</strong>
-      <button type="button" class="btn btn-sm btn-neutral" id="load-preset">Vorlage für Typ laden</button>
-      <span class="hint">Spaltennamen frei wählbar – ideal für eigene Tabellen.</span>
+      <span class="hint">Spaltennamen frei wählbar – Vorlage wird beim Typ-Wechsel automatisch geladen.</span>
     </div>
     <div class="col-editor" id="cols"></div>
     <button type="button" class="btn btn-sm btn-neutral" id="add-col">+ Spalte</button>
@@ -200,16 +199,23 @@ async function openStandingsEditor(table, seasons) {
     renderCols(); renderRows();
   });
   m.querySelector("#add-row").addEventListener("click", () => { syncRowsFromDom(); rows.unshift({ values: {} }); renderRows(); });
-  m.querySelector("#load-preset").addEventListener("click", async () => {
-    const type = m.querySelector("#st-type").value;
+
+  // Passende Spalten-Vorlage automatisch laden, sobald der Typ gewechselt wird.
+  // Für „Custom“ gibt es keine Vorlage → Spalten bleiben unverändert.
+  // Lookup ist case-insensitiv, da der Server die Keys in camelCase liefert
+  // (liga/monatspokal/…), der lokale Fallback aber in PascalCase (Liga/…).
+  async function applyPreset(type) {
     const presets = await loadPresets();
-    if (presets[type]) {
-      if (rows.length && !confirm("Spalten durch die Vorlage ersetzen? Vorhandene Zeilenwerte bleiben, soweit die Spalten passen.")) return;
-      syncRowsFromDom();
-      cols = JSON.parse(presets[type]);
-      renderCols(); renderRows();
-    } else { toast("Für „Custom“ gibt es keine Vorlage – Spalten selbst anlegen.", "err"); }
-  });
+    const key = Object.keys(presets).find(k => k.toLowerCase() === String(type).toLowerCase());
+    if (!key) return;
+    syncRowsFromDom();
+    // Nur nachfragen, wenn bereits Daten erfasst sind, die verloren gehen könnten.
+    const hasData = rows.some(r => Object.values(r.values || {}).some(v => String(v).trim() !== ""));
+    if (hasData && !confirm("Spalten durch die Vorlage ersetzen? Vorhandene Zeilenwerte bleiben, soweit die Spalten passen.")) return;
+    cols = JSON.parse(presets[key]);
+    renderCols(); renderRows();
+  }
+  m.querySelector("#st-type").addEventListener("change", e => applyPreset(e.target.value));
 
   m.querySelector("#cancel").addEventListener("click", closeModal);
   m.querySelector("#save").addEventListener("click", async () => {
