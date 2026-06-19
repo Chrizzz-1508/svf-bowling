@@ -566,6 +566,8 @@ function renderField(f, value, isEdit) {
       }
     case "email":
       inner = `<input type="email" id="${id}" name="${f.name}" value="${escapeHtml(value || "")}" ${locked}>`; break;
+    case "password":
+      inner = `<input type="password" id="${id}" name="${f.name}" value="${escapeHtml(value || "")}" placeholder="${escapeHtml(f.placeholder || "")}" autocomplete="off">`; break;
     case "select":
       inner = `<select id="${id}" name="${f.name}">${(f._opts || []).map(o =>
         `<option value="${o.value}" ${String(o.value) === String(value ?? "") ? "selected" : ""}>${escapeHtml(o.label)}</option>`).join("")}</select>`; break;
@@ -845,7 +847,8 @@ function openDownloadFormV2(download) {
 // ---------------------------------------------------------------------------
 async function renderSettings(content) {
   try {
-    const [s, standings] = await Promise.all([SVF.get("/api/settings"), SVF.get("/api/admin/standings").catch(() => [])]);
+    // Admin-Variante laden: enthält die Teamup-Konfiguration (API-Key nur als "gesetzt"-Flag).
+    const [s, standings] = await Promise.all([SVF.get("/api/admin/settings"), SVF.get("/api/admin/standings").catch(() => [])]);
     const seasons = await loadSeasons().catch(() => []);
     const seasonName = id => (seasons.find(x => x.id === id) || {}).name || "";
     const tableOpts = [{ value: "", label: "Automatisch (aktuellste Liga-Tabelle)" }]
@@ -863,15 +866,53 @@ async function renderSettings(content) {
       { name: "facebookUrl", label: "Facebook-URL", type: "text" },
       { name: "instagramUrl", label: "Instagram-URL", type: "text" }
     ];
+
+    // Teamup-Kalender-Integration. Der API-Key ist "write-only": er wird nie
+    // zurückgegeben, ein leeres Feld lässt den gespeicherten Schlüssel unangetastet.
+    const teamupFields = [
+      { name: "teamupSyncEnabled", label: "Teamup-Kalender automatisch synchronisieren (stündlich)", type: "checkbox" },
+      { name: "teamupCalendarKey", label: "Teamup Calendar-Key", type: "text",
+        hint: "Aus der Kalender-URL teamup.com/<KEY>. Vertraulich – wird nie öffentlich ausgeliefert." },
+      { name: "teamupApiKey", label: "Teamup API-Key", type: "password",
+        placeholder: s.teamupApiKeySet ? "•••••••• gesetzt – leer lassen zum Beibehalten" : "noch nicht gesetzt",
+        hint: "Geheim. Wird nur im Backend gespeichert und nie zurückgegeben. Zum Ändern neuen Key eingeben." },
+      { name: "teamupSubcalendarIds", label: "Sub-Kalender-Ids (CSV, leer = alle)", type: "text",
+        hint: "Nur diese Teamup-Sub-Kalender anzeigen, z. B. „9892208, 9892038“. Leer = alle." }
+    ];
     fields.forEach(f => { if (f.type === "select") f._opts = f.options; });
 
+    const lastSync = s.teamupLastSyncAt ? new Date(s.teamupLastSyncAt).toLocaleString("de-DE") : "noch nie";
+    const statusHtml = `<div class="hint" style="margin-top:.2rem">
+      Letzter Sync: <strong>${escapeHtml(lastSync)}</strong>${s.teamupLastSyncStatus ? " · " + escapeHtml(s.teamupLastSyncStatus) : ""}
+    </div>`;
+
     content.innerHTML = `<div class="modal-card" style="max-width:680px;margin:0">
-      <div class="modal-body"><form id="settings-form">${fields.map(f => renderField(f, s[f.name])).join("")}</form></div>
-      <div class="modal-foot"><button class="btn" id="save-settings">Speichern</button></div></div>`;
+      <div class="modal-body"><form id="settings-form">
+        ${fields.map(f => renderField(f, s[f.name])).join("")}
+        <hr style="border:none;border-top:1px solid var(--color-border);margin:1.2rem 0">
+        <h3 style="margin:.2rem 0 .8rem">Teamup-Kalender</h3>
+        ${teamupFields.map(f => renderField(f, s[f.name])).join("")}
+        ${statusHtml}
+      </form></div>
+      <div class="modal-foot" style="gap:.6rem">
+        <button class="btn btn-neutral" id="teamup-sync-now" type="button">Jetzt synchronisieren</button>
+        <button class="btn" id="save-settings">Speichern</button>
+      </div></div>`;
+
+    const allFields = fields.concat(teamupFields);
     content.querySelector("#save-settings").addEventListener("click", async () => {
-      const v = readForm(fields, content);
-      try { await SVF.send("PUT", "/api/admin/settings", Object.assign({ id: 1 }, s, v)); toast("Gespeichert."); }
+      const v = readForm(allFields, content);
+      try { await SVF.send("PUT", "/api/admin/settings", Object.assign({ id: 1 }, s, v)); toast("Gespeichert."); go("settings"); }
       catch (e) { toast(e.message, "err"); }
+    });
+    content.querySelector("#teamup-sync-now").addEventListener("click", async e => {
+      const btn = e.currentTarget; const orig = btn.textContent;
+      btn.disabled = true; btn.textContent = "Synchronisiere…";
+      try {
+        const r = await SVF.send("POST", "/api/admin/teamup/sync");
+        toast(r.status || "Sync ausgelöst.", r.ran ? "ok" : "err");
+        go("settings");
+      } catch (err) { toast(err.message, "err"); btn.disabled = false; btn.textContent = orig; }
     });
   } catch (e) { content.innerHTML = `<div class="error-box">${escapeHtml(e.message)}</div>`; }
 }

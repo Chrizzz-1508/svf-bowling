@@ -76,7 +76,7 @@ function externalNewsItem(item) {
 
 function externalNewsCard(item) {
   const date = item.publishedAt ? formatDate(item.publishedAt) : "";
-  const source = item.sourceKey === "dbu" ? "DBU" : "WBV";
+  const source = item.sourceKey === "dbu" ? "DBU" : "WKBV";
   const url = escapeHtml(item.url || "#");
   // Vorschaubild aus dem Verbands-Artikel; bei Ladefehler -> Platzhaltergrafik.
   const img = item.imageUrl ? escapeHtml(item.imageUrl) : null;
@@ -272,7 +272,7 @@ const PAGES = {
       filterBox.innerHTML =
         `<button class="pill ${!externalMode && activeCat === null ? "active" : ""}" data-cat="">Alle</button>` +
         categories.map(c => `<button class="pill ${!externalMode && activeCat === c.id ? "active" : ""}" data-cat="${c.id}">${escapeHtml(c.name)}</button>`).join("") +
-        `<button class="pill ${externalMode && activeFeed === "wkbv" ? "active" : ""}" data-feed="wkbv">WBV</button>` +
+        `<button class="pill ${externalMode && activeFeed === "wkbv" ? "active" : ""}" data-feed="wkbv">WKBV</button>` +
         `<button class="pill ${externalMode && activeFeed === "dbu" ? "active" : ""}" data-feed="dbu">DBU</button>`;
       filterBox.querySelectorAll(".pill").forEach(p => p.addEventListener("click", () => {
         activeFeed = p.dataset.feed || null;
@@ -321,7 +321,7 @@ const PAGES = {
         listEl.innerHTML = items.length
           ? items.map(externalNewsCard).join("") +
             `<div class="feed-legal-note">Externe Verbandsmeldungen werden hier nur als kurze Teaser mit Quellenlink angezeigt. Die vollständigen Inhalte liegen bei der jeweiligen Quelle.</div>`
-          : `<div class="empty" style="grid-column:1/-1">Aktuell keine ${activeFeed === "dbu" ? "DBU" : "WBV"}-News verfügbar.</div>`;
+          : `<div class="empty" style="grid-column:1/-1">Aktuell keine ${activeFeed === "dbu" ? "DBU" : "WKBV"}-News verfügbar.</div>`;
         return;
         listEl.innerHTML = sources.length
           ? sources.map(externalNewsSourceCard).join("") +
@@ -703,11 +703,16 @@ function eventRow(e) {
   const wd = isNaN(d) ? "" : d.toLocaleDateString("de-DE", { weekday: "short" });
   const range = e.endDate && e.endDate !== e.startDate
     ? `${formatDate(e.startDate)} – ${formatDate(e.endDate)}` : formatDate(e.startDate);
+  const cat = e.category ? ` · ${escapeHtml(e.category)}` : "";
+  // Bei Teamup-Terminen mit Anmeldung nur die ANZAHL zeigen – nie, wer angemeldet ist.
+  const count = (e.participantCount != null)
+    ? `<div class="meta">👥 ${e.participantCount} Anmeldung${e.participantCount === 1 ? "" : "en"}</div>` : "";
   return `<div class="event">
     <div class="date-chip"><div class="wd">${escapeHtml(wd)}</div><div class="d">${day}</div><div class="m">${escapeHtml(mon)}</div></div>
     <div>
       <strong>${escapeHtml(e.title)}</strong>
-      <div class="meta">${range}${e.location ? " · " + escapeHtml(e.location) : ""}</div>
+      <div class="meta">${range}${e.location ? " · " + escapeHtml(e.location) : ""}${cat}</div>
+      ${count}
       ${e.description ? `<p style="margin:.4rem 0 0">${escapeHtml(e.description)}</p>` : ""}
     </div></div>`;
 }

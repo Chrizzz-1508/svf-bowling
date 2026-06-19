@@ -15,6 +15,7 @@ public static class SeedData
     {
         await EnsureAdminAsync(db, config);
         await EnsureSettingsAsync(db);
+        await EnsureTeamupConfigAsync(db, config);
         await EnsureCategoriesAsync(db);
         await EnsurePagesAsync(db);
         await EnsureEditablePageDefaultsAsync(db);
@@ -60,6 +61,36 @@ public static class SeedData
                           "Hier findet ihr aktuelle Berichte, Liga-Ergebnisse, Termine und Bilder rund um unseren Verein.",
             ContactEmail = "info@svf-bowling.de"
         });
+    }
+
+    /// <summary>
+    /// Übernimmt Teamup-Zugangsdaten aus den Umgebungsvariablen
+    /// TEAMUP_API_KEY / TEAMUP_CALENDAR_KEY in die Einstellungen – aber nur,
+    /// wenn dort noch nichts hinterlegt ist (Admin-Eingaben werden nie überschrieben).
+    /// So bleibt der geheime Schlüssel aus dem Quellcode/Git heraus.
+    /// </summary>
+    private static async Task EnsureTeamupConfigAsync(AppDbContext db, IConfiguration config)
+    {
+        var settings = await db.SiteSettings.FindAsync(1);
+        if (settings is null) return;
+
+        var apiKey = config["TEAMUP_API_KEY"];
+        var calKey = config["TEAMUP_CALENDAR_KEY"];
+        var changed = false;
+
+        if (!string.IsNullOrWhiteSpace(apiKey) && string.IsNullOrWhiteSpace(settings.TeamupApiKey))
+        { settings.TeamupApiKey = apiKey.Trim(); changed = true; }
+
+        if (!string.IsNullOrWhiteSpace(calKey) && string.IsNullOrWhiteSpace(settings.TeamupCalendarKey))
+        { settings.TeamupCalendarKey = calKey.Trim(); changed = true; }
+
+        // Sind beide Schlüssel erstmals vorhanden, den Sync direkt aktivieren.
+        if (changed && !settings.TeamupSyncEnabled
+            && !string.IsNullOrWhiteSpace(settings.TeamupApiKey)
+            && !string.IsNullOrWhiteSpace(settings.TeamupCalendarKey))
+        {
+            settings.TeamupSyncEnabled = true;
+        }
     }
 
     private static async Task EnsureCategoriesAsync(AppDbContext db)

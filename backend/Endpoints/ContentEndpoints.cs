@@ -6,6 +6,11 @@ namespace SvfBowling.Api.Endpoints;
 
 public static class ContentEndpoints
 {
+    /// <summary>Vereinheitlichte Terminform für die öffentliche Liste (manuell + Teamup).</summary>
+    public record PublicEventDto(int Id, string Source, string Title, string? Description,
+        DateTime StartDate, DateTime? EndDate, string? Location, string? Category,
+        int? ParticipantCount, bool SignupEnabled);
+
     public static void MapContentEndpoints(this WebApplication app)
     {
         MapSeasons(app);
@@ -182,17 +187,27 @@ public static class ContentEndpoints
     // ---------------- Termine ----------------
     private static void MapEvents(WebApplication app)
     {
+        // Öffentliche Terminliste: manuell gepflegte Termine UND der gespiegelte
+        // Teamup-Kalender, zusammengeführt und chronologisch sortiert.
         app.MapGet("/api/events", async (AppDbContext db, bool? upcoming) =>
         {
-            var q = db.Events.Where(e => e.IsPublished);
+            var manual = await db.Events.Where(e => e.IsPublished).ToListAsync();
+            var teamup = await db.TeamupEvents.ToListAsync();
+
+            var all = manual
+                .Select(e => new PublicEventDto(e.Id, "manual", e.Title, e.Description,
+                    e.StartDate, e.EndDate, e.Location, null, null, false))
+                .Concat(teamup.Select(t => new PublicEventDto(t.Id, "teamup", t.Title, null,
+                    t.StartDate, t.EndDate, t.Location, t.Category, t.ParticipantCount, t.SignupEnabled)));
+
             if (upcoming == true)
             {
                 // "Heute" in deutscher Zeit (nicht UTC), sonst gilt ein Termin nach
                 // Mitternacht MEZ noch als "heute", weil es in UTC noch der Vortag ist.
                 var todayDe = GermanMidnightUtc();
-                q = q.Where(e => (e.EndDate ?? e.StartDate) >= todayDe);
+                all = all.Where(e => (e.EndDate ?? e.StartDate) >= todayDe);
             }
-            return Results.Ok(await q.OrderBy(e => e.StartDate).ToListAsync());
+            return Results.Ok(all.OrderBy(e => e.StartDate).ToList());
         }).WithTags("Termine");
 
         var admin = app.MapGroup("/api/admin/events").WithTags("Termine (Admin)").RequireAuthorization();
@@ -263,24 +278,56 @@ public static class ContentEndpoints
     // ---------------- Einstellungen ----------------
     private static void MapSettings(WebApplication app)
     {
+        // Öffentlich: NIEMALS die Teamup-Secrets (ApiKey/CalendarKey) ausliefern.
         app.MapGet("/api/settings", async (AppDbContext db) =>
-            Results.Ok(await db.SiteSettings.FindAsync(1) ?? new SiteSettings()))
-            .WithTags("Einstellungen");
+        {
+            var s = await db.SiteSettings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == 1) ?? new SiteSettings();
+            return Results.Ok(PublicSettings(s));
+        }).WithTags("Einstellungen");
+
+        // Admin: vollständig – aber der ApiKey wird nur als "gesetzt"-Flag zurückgegeben.
+        app.MapGet("/api/admin/settings", async (AppDbContext db) =>
+        {
+            var s = await db.SiteSettings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == 1) ?? new SiteSettings();
+            return Results.Ok(AdminSettings(s));
+        }).WithTags("Einstellungen (Admin)").RequireAuthorization();
 
         app.MapPut("/api/admin/settings", async (SiteSettings input, AppDbContext db) =>
         {
             var s = await db.SiteSettings.FindAsync(1);
-            if (s is null) { input.Id = 1; db.SiteSettings.Add(input); }
-            else
-            {
-                s.ClubName = input.ClubName; s.Tagline = input.Tagline; s.WelcomeText = input.WelcomeText;
-                s.ContactEmail = input.ContactEmail; s.ContactPhone = input.ContactPhone; s.Address = input.Address;
-                s.FacebookUrl = input.FacebookUrl; s.InstagramUrl = input.InstagramUrl;
-                s.LogoImageId = input.LogoImageId; s.HeaderImageId = input.HeaderImageId;
-                s.HomeStandingsTableId = input.HomeStandingsTableId;
-            }
+            if (s is null) { s = new SiteSettings { Id = 1 }; db.SiteSettings.Add(s); }
+
+            s.ClubName = input.ClubName; s.Tagline = input.Tagline; s.WelcomeText = input.WelcomeText;
+            s.ContactEmail = input.ContactEmail; s.ContactPhone = input.ContactPhone; s.Address = input.Address;
+            s.FacebookUrl = input.FacebookUrl; s.InstagramUrl = input.InstagramUrl;
+            s.LogoImageId = input.LogoImageId; s.HeaderImageId = input.HeaderImageId;
+            s.HomeStandingsTableId = input.HomeStandingsTableId;
+
+            // Teamup-Konfiguration
+            s.TeamupCalendarKey = string.IsNullOrWhiteSpace(input.TeamupCalendarKey) ? null : input.TeamupCalendarKey.Trim();
+            s.TeamupSubcalendarIds = string.IsNullOrWhiteSpace(input.TeamupSubcalendarIds) ? null : input.TeamupSubcalendarIds.Trim();
+            s.TeamupSyncEnabled = input.TeamupSyncEnabled;
+            // Write-only: ein leerer ApiKey lässt den vorhandenen Schlüssel unangetastet.
+            if (!string.IsNullOrWhiteSpace(input.TeamupApiKey))
+                s.TeamupApiKey = input.TeamupApiKey.Trim();
+
             await db.SaveChangesAsync();
-            return Results.Ok(await db.SiteSettings.FindAsync(1));
+            return Results.Ok(AdminSettings(s));
         }).WithTags("Einstellungen (Admin)").RequireAuthorization();
     }
+
+    private static object PublicSettings(SiteSettings s) => new
+    {
+        s.Id, s.ClubName, s.Tagline, s.WelcomeText, s.ContactEmail, s.ContactPhone,
+        s.Address, s.FacebookUrl, s.InstagramUrl, s.LogoImageId, s.HeaderImageId, s.HomeStandingsTableId
+    };
+
+    private static object AdminSettings(SiteSettings s) => new
+    {
+        s.Id, s.ClubName, s.Tagline, s.WelcomeText, s.ContactEmail, s.ContactPhone,
+        s.Address, s.FacebookUrl, s.InstagramUrl, s.LogoImageId, s.HeaderImageId, s.HomeStandingsTableId,
+        s.TeamupCalendarKey, s.TeamupSubcalendarIds, s.TeamupSyncEnabled,
+        s.TeamupLastSyncAt, s.TeamupLastSyncStatus,
+        TeamupApiKeySet = !string.IsNullOrWhiteSpace(s.TeamupApiKey)
+    };
 }

@@ -78,6 +78,15 @@ builder.Services.AddHttpClient("external-news", client =>
     client.Timeout = TimeSpan.FromSeconds(8);
 });
 
+// Teamup-Kalender-Integration: HTTP-Client + Sync-Runner + stündlicher Hintergrunddienst.
+builder.Services.AddHttpClient("teamup", client =>
+{
+    client.BaseAddress = new Uri("https://api.teamup.com/");
+    client.Timeout = TimeSpan.FromSeconds(20);
+});
+builder.Services.AddScoped<SvfBowling.Api.Services.TeamupSyncRunner>();
+builder.Services.AddHostedService<SvfBowling.Api.Services.TeamupSyncService>();
+
 // Öffentliche Read-API mit Bearer-Token-Auth (keine Cookies) → alle Origins erlaubt.
 builder.Services.AddCors(options => options.AddDefaultPolicy(p =>
     p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
@@ -119,6 +128,7 @@ app.MapContentEndpoints();
 app.MapMediaEndpoints();
 app.MapExternalNewsEndpoints();
 app.MapUtilityEndpoints();
+app.MapTeamupEndpoints();
 
 // ---------------- DB migrieren + seeden ----------------
 using (var scope = app.Services.CreateScope())

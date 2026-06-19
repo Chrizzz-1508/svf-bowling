@@ -19,6 +19,7 @@ public class AppDbContext : DbContext
     public DbSet<Image> Images => Set<Image>();
     public DbSet<GalleryAlbum> GalleryAlbums => Set<GalleryAlbum>();
     public DbSet<Event> Events => Set<Event>();
+    public DbSet<TeamupEvent> TeamupEvents => Set<TeamupEvent>();
     public DbSet<Download> Downloads => Set<Download>();
     public DbSet<Page> Pages => Set<Page>();
     public DbSet<SiteSettings> SiteSettings => Set<SiteSettings>();
@@ -39,6 +40,9 @@ public class AppDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
 
         b.Entity<Image>().HasIndex(i => i.AlbumId);
+
+        b.Entity<TeamupEvent>().HasIndex(e => e.StartDate);
+        b.Entity<TeamupEvent>().HasIndex(e => e.ExternalId);
 
         // PostgreSQL "timestamp with time zone" verlangt DateTime mit Kind=Utc.
         // Eingaben aus Formularen (datetime-local) oder mit Offset kommen aber als
