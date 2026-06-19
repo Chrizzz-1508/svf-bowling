@@ -95,13 +95,22 @@ public static class UtilityEndpoints
                 .Select(n => new { n.Id, n.Title, n.Slug, n.Excerpt, n.PublishedAt, n.Author })
                 .ToListAsync();
 
-            var events = await db.Events
+            // Manuell gepflegte Termine UND der gespiegelte Teamup-Kalender.
+            var manualEvents = await db.Events
                 .Where(e => e.IsPublished &&
                     (EF.Functions.ILike(e.Title, pattern) || EF.Functions.ILike(e.Description ?? "", pattern) || EF.Functions.ILike(e.Location ?? "", pattern)))
-                .OrderBy(e => e.StartDate)
-                .Take(15)
                 .Select(e => new { e.Id, e.Title, e.StartDate, e.EndDate, e.Location })
                 .ToListAsync();
+
+            var teamupEvents = await db.TeamupEvents
+                .Where(t => EF.Functions.ILike(t.Title, pattern) || EF.Functions.ILike(t.Location ?? "", pattern) || EF.Functions.ILike(t.Category ?? "", pattern))
+                .Select(t => new { t.Id, t.Title, t.StartDate, t.EndDate, t.Location })
+                .ToListAsync();
+
+            var events = manualEvents.Concat(teamupEvents)
+                .OrderBy(e => e.StartDate)
+                .Take(15)
+                .ToList();
 
             var standings = await db.StandingsTables
                 .Where(t => t.IsPublished && EF.Functions.ILike(t.Title, pattern))
