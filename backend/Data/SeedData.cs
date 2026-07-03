@@ -25,6 +25,8 @@ public static class SeedData
             await EnsureDemoDataAsync(db);
 
         await db.SaveChangesAsync();
+        await EnsureRoster20260621Async(db);
+        await db.SaveChangesAsync();
     }
 
     private static async Task EnsureAdminAsync(AppDbContext db, IConfiguration config)
@@ -171,11 +173,11 @@ public static class SeedData
 
         // Mannschaften
         db.Teams.AddRange(
-            new Team { Name = "1. Damenmannschaft", League = "Oberliga", SortOrder = 0 },
-            new Team { Name = "1. Herrenmannschaft", League = "Oberliga", SortOrder = 1 },
-            new Team { Name = "2. Herrenmannschaft MIX", League = "Kreisliga 3", SortOrder = 2 },
-            new Team { Name = "3. Herrenmannschaft MIX", League = "Kreisliga 4", SortOrder = 3 },
-            new Team { Name = "Jugend", League = "Jugend", SortOrder = 4 });
+            new Team { Name = "1. Damenmannschaft", League = "Oberliga", SortOrder = 3 },
+            new Team { Name = "1. Herrenmannschaft", League = "Oberliga", SortOrder = 0 },
+            new Team { Name = "2. Herrenmannschaft (Mix)", League = "Kreisliga", SortOrder = 1 },
+            new Team { Name = "3. Herrenmannschaft (Mix)", League = "Kreisliga", SortOrder = 2 },
+            new Team { Name = "Jugendmannschaft", League = "Jugendliga", SortOrder = 4 });
 
         // News
         var allgemein = await db.Categories.FirstOrDefaultAsync(c => c.Name == "Allgemein");
@@ -227,6 +229,146 @@ public static class SeedData
 
     private static StandingsRow DemoRow(int pos, string valuesJson) =>
         new() { Position = pos, SortOrder = pos, ValuesJson = valuesJson };
+
+    /// <summary>
+    /// Spielerliste mit Stand 21.06.2026. Die Versionsmarke sorgt dafür, dass der
+    /// Import genau einmal läuft und spätere Änderungen im Adminbereich respektiert.
+    /// </summary>
+    private static async Task EnsureRoster20260621Async(AppDbContext db)
+    {
+        const string version = "2026-06-21";
+        var settings = await db.SiteSettings.FindAsync(1);
+        if (settings is null || settings.RosterVersion == version) return;
+
+        var herren1 = await EnsureTeamAsync(db, 2, "1. Herrenmannschaft", "Oberliga", 0);
+        var herren2 = await EnsureTeamAsync(db, 3, "2. Herrenmannschaft (Mix)", "Kreisliga", 1);
+        var herren3 = await EnsureTeamAsync(db, 4, "3. Herrenmannschaft (Mix)", "Kreisliga", 2);
+        var damen = await EnsureTeamAsync(db, 1, "1. Damenmannschaft", "Oberliga", 3);
+        var jugend = await EnsureTeamAsync(db, 5, "Jugendmannschaft", "Jugendliga", 4,
+            "Trainer: Torsten Reinhardt und Kay Kiesshauer");
+        var ergaenzung = await db.Teams.FirstOrDefaultAsync(t => t.Name == "Ergänzungsspieler");
+        if (ergaenzung is null)
+        {
+            ergaenzung = new Team { Name = "Ergänzungsspieler" };
+            db.Teams.Add(ergaenzung);
+        }
+        ergaenzung.League = null;
+        ergaenzung.Description = "Erwachsene und Jugend";
+        ergaenzung.SortOrder = 5;
+        ergaenzung.IsActive = true;
+
+        await db.SaveChangesAsync();
+
+        var players = await db.Players.ToListAsync();
+        foreach (var player in players) player.IsActive = false;
+
+        var roster = new[]
+        {
+            Entry("Kevin Anthony", "Frank", herren1, null, 0),
+            Entry("Ben", "Koch", herren1, null, 1),
+            Entry("Markus", "Stein", herren1, null, 2),
+            Entry("Kay", "Kiesshauer", herren1, "Mannschaftsführer/in · Trainer Jugend", 3),
+            Entry("Hans-Jürgen", "Oehlrich", herren1, null, 4),
+            Entry("Hans-Jürgen", "Koch", herren1, null, 5),
+
+            Entry("Patrick", "Bertsch", herren2, null, 10),
+            Entry("Michael", "Schneider", herren2, null, 11),
+            Entry("Sabrina", "Thoma", herren2, null, 12),
+            Entry("Udo", "Thoma", herren2, "Mannschaftsführer/in", 13),
+            Entry("Marc", "Vogelwaid", herren2, null, 14),
+            Entry("Sarah", "Vogelwaid", herren2, null, 15),
+
+            Entry("Bernd", "Kopriva", herren3, null, 20),
+            Entry("Christian", "Schreier", herren3, "Mannschaftsführer/in", 21),
+            Entry("Felix", "Schuler", herren3, null, 22),
+            Entry("Fynn", "Schuler", herren3, null, 23),
+            Entry("Samantha", "Fabach", herren3, null, 24),
+            Entry("Norbert", "Herkner", herren3, null, 25),
+            Entry("Cordelia", "Fabach", herren3, null, 26),
+
+            Entry("Kathleen", "Schmorde", damen, null, 30),
+            Entry("Christiane", "Discher", damen, "Mannschaftsführer/in", 31),
+            Entry("Alexandra", "Barth", damen, null, 32),
+            Entry("Iris", "Weinmann", damen, null, 33),
+            Entry("Vanessa", "Morgenstern", damen, null, 34),
+            Entry("Gabriela", "Bleul", damen, null, 35, "Gabi|Bleul"),
+
+            Entry("Tim", "Herrmann Hofmann", jugend, null, 40),
+            Entry("Maximilian", "Merz", jugend, null, 41),
+            Entry("Louis", "Diehm", jugend, null, 42, "Loius|Diehm"),
+            Entry("Hannah", "Hilbert", jugend, null, 43),
+            Entry("Haojia", "Song", jugend, null, 44),
+            Entry("Torsten", "Reinhardt", jugend, "Trainer", 45),
+
+            Entry("Maja", "Mentzschel", ergaenzung, "Erwachsene", 50),
+            Entry("Patrick", "Dürr", ergaenzung, "Erwachsene", 51),
+            Entry("Oli", "Bleul", ergaenzung, "Erwachsene", 52, "Oliver|Bleul"),
+            Entry("Nele", "Wiencken", ergaenzung, "Erwachsene", 53),
+            Entry("Eray", "Eksi", ergaenzung, "Jugend", 54)
+        };
+
+        foreach (var item in roster)
+        {
+            var player = FindPlayer(players, item.FirstName, item.LastName, item.Alias);
+            if (player is null)
+            {
+                player = new Player();
+                db.Players.Add(player);
+                players.Add(player);
+            }
+
+            player.FirstName = item.FirstName;
+            player.LastName = item.LastName;
+            player.TeamId = item.Team.Id;
+            player.Role = item.Role;
+            player.SortOrder = item.SortOrder;
+            player.IsActive = true;
+        }
+
+        settings.RosterVersion = version;
+    }
+
+    private static async Task<Team> EnsureTeamAsync(
+        AppDbContext db, int preferredId, string name, string league, int sortOrder, string? description = null)
+    {
+        var team = await db.Teams.FindAsync(preferredId)
+            ?? await db.Teams.FirstOrDefaultAsync(t => t.Name == name);
+        if (team is null)
+        {
+            team = new Team();
+            db.Teams.Add(team);
+        }
+
+        team.Name = name;
+        team.League = league;
+        if (description is not null) team.Description = description;
+        team.SortOrder = sortOrder;
+        team.IsActive = true;
+        return team;
+    }
+
+    private static RosterEntry Entry(
+        string firstName, string lastName, Team team, string? role, int sortOrder, string? alias = null) =>
+        new(firstName, lastName, team, role, sortOrder, alias);
+
+    private static Player? FindPlayer(
+        IEnumerable<Player> players, string firstName, string lastName, string? alias)
+    {
+        var match = players.FirstOrDefault(p =>
+            p.FirstName.Equals(firstName, StringComparison.OrdinalIgnoreCase) &&
+            p.LastName.Equals(lastName, StringComparison.OrdinalIgnoreCase));
+        if (match is not null || string.IsNullOrWhiteSpace(alias)) return match;
+
+        var parts = alias.Split('|', 2);
+        return parts.Length == 2
+            ? players.FirstOrDefault(p =>
+                p.FirstName.Equals(parts[0], StringComparison.OrdinalIgnoreCase) &&
+                p.LastName.Equals(parts[1], StringComparison.OrdinalIgnoreCase))
+            : null;
+    }
+
+    private sealed record RosterEntry(
+        string FirstName, string LastName, Team Team, string? Role, int SortOrder, string? Alias);
 }
 
 /// <summary>Spalten-Presets (JSON) für die bekannten Tabellentypen.</summary>

@@ -15,6 +15,9 @@ public class SiteSettings
     public int? LogoImageId { get; set; }
     public int? HeaderImageId { get; set; }
 
+    /// <summary>Zuletzt automatisch eingespielte, einmalige Kader-Version.</summary>
+    public string? RosterVersion { get; set; }
+
     /// <summary>
     /// Welche Ergebnis-Tabelle auf der Startseite angezeigt wird.
     /// null = automatisch (zuletzt aktualisierte Liga-Tabelle).

@@ -12,6 +12,8 @@
 .login-card .logo-row svg { width: 56px; height: 56px; }
 .login-card .logo-row img { width: 72px; height: 72px; object-fit: contain; border-radius: 8px; }
 .success-box { padding: .75rem 1rem; border-radius: var(--radius-sm); background: #e5f6eb; color: #176b3a; border: 1px solid #b8e2c7; }
+.info-box { padding: .75rem 1rem; border-radius: var(--radius-sm); background: #eaf2fb; color: #214f7a; border: 1px solid #bfd4ea; }
+.form-status { margin-bottom: 1rem; }
 
 /* ---- Shell ---- */
 .admin-shell { display: flex; min-height: 100vh; }

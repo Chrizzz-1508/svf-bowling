@@ -308,14 +308,14 @@ function renderLogin(msg, messageType = "error") {
   document.getElementById("forgot-password").addEventListener("click", e => { e.preventDefault(); renderForgotPassword(); });
 }
 
-function renderForgotPassword(msg) {
+function renderForgotPassword() {
   document.getElementById("app").innerHTML = `
     <div class="login-wrap">
       <form class="login-card" id="forgot-form">
         <div class="logo-row"><img src="../assets/img/logo.png" alt="SV Fellbach Bowling"></div>
         <h1>Passwort vergessen</h1>
         <p class="muted center">Trage die E-Mail-Adresse deines Kontos ein.</p>
-        ${msg ? `<div class="success-box" style="margin-bottom:1rem">${escapeHtml(msg)}</div>` : ""}
+        <div id="forgot-status" class="form-status" role="status" aria-live="polite" hidden></div>
         <div class="field"><label>E-Mail-Adresse</label><input type="email" name="email" autocomplete="email" required></div>
         <button class="btn" style="width:100%;justify-content:center" type="submit">Reset-Link anfordern</button>
         <p class="center" style="margin:1rem 0 0"><a href="#" id="back-to-login">← Zur Anmeldung</a></p>
@@ -324,14 +324,26 @@ function renderForgotPassword(msg) {
   document.getElementById("back-to-login").addEventListener("click", e => { e.preventDefault(); renderLogin(); });
   document.getElementById("forgot-form").addEventListener("submit", async e => {
     e.preventDefault();
-    const button = e.target.querySelector("button[type=submit]");
+    const form = e.currentTarget;
+    const button = form.querySelector("button[type=submit]");
+    const status = form.querySelector("#forgot-status");
+    const email = form.elements.namedItem("email").value;
     button.disabled = true;
+    button.textContent = "Wird gesendet…";
+    status.hidden = false;
+    status.className = "form-status info-box";
+    status.textContent = "Die Anfrage wird gesendet…";
     try {
-      const res = await SVF.send("POST", "/api/auth/forgot-password", { email: e.target.email.value });
-      renderForgotPassword(res.message);
-    } catch (err) {
+      const res = await SVF.send("POST", "/api/auth/forgot-password", { email });
+      status.className = "form-status success-box";
+      status.textContent = res.message;
+      button.textContent = "Reset-Link erneut anfordern";
       button.disabled = false;
-      toast(err.message, "err");
+    } catch (err) {
+      status.className = "form-status error-box";
+      status.textContent = err.message;
+      button.textContent = "Reset-Link anfordern";
+      button.disabled = false;
     }
   });
 }
