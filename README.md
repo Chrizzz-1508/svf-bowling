@@ -44,6 +44,13 @@ Die Konfiguration kommt aus Umgebungsvariablen **oder** `appsettings.Development
 | `ADMIN_PASSWORD`  | Passwort des initialen Admin-Kontos                              |
 | `ADMIN_EMAIL`     | (optional) E-Mail des Admin-Kontos                              |
 | `SEED_DEMO_DATA`  | `true` = Beispiel-Berichte/-Tabellen anlegen                    |
+| `PUBLIC_SITE_URL` | Öffentliche Basis-URL, z. B. `https://svf-bowling.de`           |
+| `SMTP_HOST`       | SMTP-Server für Passwort-Reset-E-Mails                          |
+| `SMTP_PORT`       | SMTP-Port, normalerweise `587`                                  |
+| `SMTP_USERNAME`   | Benutzername des SMTP-Postfachs                                 |
+| `SMTP_PASSWORD`   | Passwort des SMTP-Postfachs                                     |
+| `SMTP_FROM_EMAIL` | Absenderadresse der Reset-E-Mails                               |
+| `SMTP_FROM_NAME`  | Optionaler Absendername                                         |
 
 > CORS ist offen konfiguriert (alle Origins erlaubt) – die API ist eine öffentliche
 > Read-API mit Bearer-Token-Login (keine Cookies), daher unbedenklich.
@@ -71,8 +78,12 @@ npx serve .        # oder ein anderer statischer Server / Live-Server in VS Code
    *nicht* beim Postgres-Service. Unter *Backend-Service → Variables*:
    - `JWT_SECRET` = langer Zufallswert
    - `ADMIN_USERNAME`, `ADMIN_PASSWORD` (Erst-Login)
+   - `ADMIN_EMAIL` = E-Mail-Adresse des initialen Admin-Kontos
    - `DATABASE_URL` – falls nicht automatisch vorhanden, als Referenz auf den DB-Service anlegen:
      `${{Postgres.DATABASE_URL}}` (`Postgres` = Name deines PostgreSQL-Services).
+   - `PUBLIC_SITE_URL` = `https://svf-bowling.de`
+   - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`
+     für die Passwort-Reset-E-Mails. Diese Werte niemals in Git eintragen.
    - `PORT` setzt Railway automatisch (das Dockerfile nutzt ihn).
 4. Deploy abwarten → Railway vergibt eine öffentliche URL
    (z. B. `https://svf-bowling-backend.up.railway.app`). Swagger: `…/swagger`.
@@ -102,6 +113,9 @@ Im Admin-Bereich (`/admin/`) anmelden. Bereiche:
 - **Seiten** – Impressum, Datenschutz & Co. direkt editieren.
 - **Einstellungen** – Vereinsname, Slogan, Begrüßungstext, Kontakt, Social-Links, Logo/Header.
 - **Benutzer** (nur Admin-Rolle) – weitere Konten für Vertretung anlegen (Rolle *Admin* oder *Editor*).
+- **Konto** – jeder angemeldete Benutzer kann sein eigenes Passwort ändern. Über
+  **Passwort vergessen?** wird ein 60 Minuten gültiger Einmal-Link an die im Konto
+  hinterlegte E-Mail-Adresse geschickt.
 
 **Bilder** werden im Bereich *Bilder* hochgeladen und können dort einem Galerie-Album
 zugeordnet werden; Titelbilder für Berichte/Mannschaften wählt man direkt im jeweiligen Formular.

@@ -2,9 +2,11 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using System.Security.Claims;
 using SvfBowling.Api.Auth;
 using SvfBowling.Api.Data;
 using SvfBowling.Api.Endpoints;
+using SvfBowling.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 var config = builder.Configuration;
@@ -68,6 +70,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(1)
         };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var idValue = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                var versionValue = context.Principal?.FindFirstValue("token_version");
+                if (!int.TryParse(idValue, out var userId) || !int.TryParse(versionValue, out var tokenVersion))
+                {
+                    context.Fail("Ungültiges Login-Token.");
+                    return;
+                }
+
+                var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+                var user = await db.AdminUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
+                if (user is null || !user.IsActive || user.TokenVersion != tokenVersion)
+                    context.Fail("Login-Token ist nicht mehr gültig.");
+            }
+        };
     });
 
 builder.Services.AddAuthorization(options =>
@@ -77,6 +97,7 @@ builder.Services.AddHttpClient("external-news", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(8);
 });
+builder.Services.AddSingleton<IPasswordResetEmailSender, PasswordResetEmailSender>();
 
 // Teamup-Kalender-Integration: HTTP-Client + Sync-Runner + stündlicher Hintergrunddienst.
 builder.Services.AddHttpClient("teamup", client =>

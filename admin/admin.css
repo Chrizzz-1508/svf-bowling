@@ -4,13 +4,14 @@
 .admin-body { background: var(--color-bg-alt); }
 
 /* ---- Login ---- */
-.login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 20px;
+.login-wrap { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; padding: 20px;
   background: linear-gradient(135deg, #111418 0%, #20262c 100%); }
-.login-card { background: #fff; border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 2rem; width: 100%; max-width: 380px; }
+.login-card { background: #fff; border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 2rem; width: calc(100vw - 40px); max-width: 380px; }
 .login-card h1 { font-size: 1.4rem; text-align: center; }
 .login-card .logo-row { display: grid; place-items: center; margin-bottom: .5rem; }
 .login-card .logo-row svg { width: 56px; height: 56px; }
 .login-card .logo-row img { width: 72px; height: 72px; object-fit: contain; border-radius: 8px; }
+.success-box { padding: .75rem 1rem; border-radius: var(--radius-sm); background: #e5f6eb; color: #176b3a; border: 1px solid #b8e2c7; }
 
 /* ---- Shell ---- */
 .admin-shell { display: flex; min-height: 100vh; }
@@ -74,6 +75,7 @@
 .modal { position: fixed; inset: 0; background: rgba(16,24,40,.5); display: none; z-index: 100; padding: 20px; overflow-y: auto; }
 .modal.open { display: block; }
 .modal-card { background: #fff; border-radius: var(--radius); box-shadow: var(--shadow-lg); width: 100%; max-width: 720px; margin: 3vh auto; }
+.modal-card.account-card { max-width: 480px; }
 .modal-card.wide { max-width: min(1500px, calc(100vw - 48px)); }
 .modal-head { display: flex; align-items: center; padding: 1rem 1.4rem; border-bottom: 1px solid var(--color-border); }
 .modal-head h2 { margin: 0; font-size: 1.2rem; }

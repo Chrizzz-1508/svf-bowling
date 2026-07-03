@@ -190,7 +190,7 @@ const RESOURCES = {
       { name: "username", label: "Benutzername", type: "text", required: true, lockOnEdit: true },
       { name: "email", label: "E-Mail", type: "email" },
       { name: "role", label: "Rolle", type: "select", options: [{ value: "Editor", label: "Editor" }, { value: "Admin", label: "Admin" }] },
-      { name: "password", label: "Passwort", type: "text", hint: "Beim Bearbeiten leer lassen = unverändert." },
+      { name: "password", label: "Passwort", type: "password", hint: "Mindestens 8 Zeichen; beim Bearbeiten leer lassen = unverändert." },
       { name: "isActive", label: "Aktiv", type: "checkbox" }
     ],
     toPayload: (v, isEdit) => isEdit
@@ -271,23 +271,26 @@ function openAdminLightbox(src, isVideo) {
 //  Auth / Init
 // ---------------------------------------------------------------------------
 function init() {
+  const hash = (location.hash || "").slice(1);
+  if (hash.startsWith("reset=")) return renderResetPassword(hash.slice(6));
   if (!SVF.token()) return renderLogin();
   renderShell();
-  const start = (location.hash || "").replace("#", "");
+  const start = hash;
   go(SECTIONS.some(s => s.key === start) ? start : "dashboard");
 }
 
-function renderLogin(msg) {
+function renderLogin(msg, messageType = "error") {
   document.getElementById("app").innerHTML = `
     <div class="login-wrap">
       <form class="login-card" id="login-form">
         <div class="logo-row"><img src="../assets/img/logo.png" alt="SV Fellbach Bowling"></div>
         <h1>Admin-Login</h1>
         <p class="muted center" style="margin-top:-.4rem">SV Fellbach – Abteilung Bowling</p>
-        ${msg ? `<div class="error-box" style="margin-bottom:1rem">${escapeHtml(msg)}</div>` : ""}
+        ${msg ? `<div class="${messageType === "success" ? "success-box" : "error-box"}" style="margin-bottom:1rem">${escapeHtml(msg)}</div>` : ""}
         <div class="field"><label>Benutzername</label><input type="text" name="username" autocomplete="username" required></div>
         <div class="field"><label>Passwort</label><input type="password" name="password" autocomplete="current-password" required></div>
         <button class="btn" style="width:100%;justify-content:center" type="submit">Anmelden</button>
+        <p class="center" style="margin:.9rem 0 0"><a href="#" id="forgot-password">Passwort vergessen?</a></p>
         <p class="center" style="margin:1rem 0 0"><a href="../index.html">← Zur Website</a></p>
       </form>
     </div>`;
@@ -301,6 +304,63 @@ function renderLogin(msg) {
     } catch (err) {
       renderLogin(err.status === 401 ? "Benutzername oder Passwort falsch." : err.message);
     }
+  });
+  document.getElementById("forgot-password").addEventListener("click", e => { e.preventDefault(); renderForgotPassword(); });
+}
+
+function renderForgotPassword(msg) {
+  document.getElementById("app").innerHTML = `
+    <div class="login-wrap">
+      <form class="login-card" id="forgot-form">
+        <div class="logo-row"><img src="../assets/img/logo.png" alt="SV Fellbach Bowling"></div>
+        <h1>Passwort vergessen</h1>
+        <p class="muted center">Trage die E-Mail-Adresse deines Kontos ein.</p>
+        ${msg ? `<div class="success-box" style="margin-bottom:1rem">${escapeHtml(msg)}</div>` : ""}
+        <div class="field"><label>E-Mail-Adresse</label><input type="email" name="email" autocomplete="email" required></div>
+        <button class="btn" style="width:100%;justify-content:center" type="submit">Reset-Link anfordern</button>
+        <p class="center" style="margin:1rem 0 0"><a href="#" id="back-to-login">← Zur Anmeldung</a></p>
+      </form>
+    </div>`;
+  document.getElementById("back-to-login").addEventListener("click", e => { e.preventDefault(); renderLogin(); });
+  document.getElementById("forgot-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const button = e.target.querySelector("button[type=submit]");
+    button.disabled = true;
+    try {
+      const res = await SVF.send("POST", "/api/auth/forgot-password", { email: e.target.email.value });
+      renderForgotPassword(res.message);
+    } catch (err) {
+      button.disabled = false;
+      toast(err.message, "err");
+    }
+  });
+}
+
+function renderResetPassword(token) {
+  SVF.setToken(null); SVF.setUser(null);
+  document.getElementById("app").innerHTML = `
+    <div class="login-wrap">
+      <form class="login-card" id="reset-form">
+        <div class="logo-row"><img src="../assets/img/logo.png" alt="SV Fellbach Bowling"></div>
+        <h1>Neues Passwort</h1>
+        <p class="muted center">Mindestens 8 Zeichen.</p>
+        <div class="field"><label>Neues Passwort</label><input type="password" name="newPassword" minlength="8" autocomplete="new-password" required></div>
+        <div class="field"><label>Passwort wiederholen</label><input type="password" name="confirmation" minlength="8" autocomplete="new-password" required></div>
+        <button class="btn" style="width:100%;justify-content:center" type="submit">Passwort speichern</button>
+        <p class="center" style="margin:1rem 0 0"><a href="#" id="back-to-login">← Zur Anmeldung</a></p>
+      </form>
+    </div>`;
+  document.getElementById("back-to-login").addEventListener("click", e => { e.preventDefault(); history.replaceState(null, "", location.pathname); renderLogin(); });
+  document.getElementById("reset-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const form = e.target;
+    if (form.newPassword.value !== form.confirmation.value)
+      return toast("Die Passwörter stimmen nicht überein.", "err");
+    try {
+      await SVF.send("POST", "/api/auth/reset-password", { token, newPassword: form.newPassword.value });
+      history.replaceState(null, "", location.pathname);
+      renderLogin("Das Passwort wurde geändert. Du kannst dich jetzt anmelden.", "success");
+    } catch (err) { toast(err.message, "err"); }
   });
 }
 
@@ -329,10 +389,22 @@ function renderShell() {
           <h1 id="section-title">Übersicht</h1>
           <div class="spacer"></div>
           <span class="who">${escapeHtml(user.username || "")} (${escapeHtml(user.role || "")})</span>
+          <button class="btn btn-sm btn-neutral admin-account" id="account">Konto</button>
           <a class="btn btn-sm btn-neutral admin-website" href="../index.html" target="_blank">Website</a>
           <button class="btn btn-sm btn-neutral" id="logout">Abmelden</button>
         </div>
         <div class="admin-content" id="content"></div>
+      </div>
+      <div class="modal" id="account-modal" aria-hidden="true">
+        <form class="modal-card account-card" id="change-password-form">
+          <div class="modal-head"><h2>Eigenes Passwort ändern</h2><button class="close" type="button" data-close-account aria-label="Schließen">×</button></div>
+          <div class="modal-body">
+            <div class="field"><label for="current-password">Aktuelles Passwort</label><input id="current-password" type="password" name="currentPassword" autocomplete="current-password" required></div>
+            <div class="field"><label for="new-password">Neues Passwort</label><input id="new-password" type="password" name="newPassword" minlength="8" autocomplete="new-password" required><div class="hint">Mindestens 8 Zeichen.</div></div>
+            <div class="field"><label for="confirm-password">Passwort wiederholen</label><input id="confirm-password" type="password" name="confirmation" minlength="8" autocomplete="new-password" required></div>
+          </div>
+          <div class="modal-foot"><button class="btn btn-neutral" type="button" data-close-account>Abbrechen</button><button class="btn" type="submit">Passwort ändern</button></div>
+        </form>
       </div>
     </div>`;
 
@@ -342,6 +414,28 @@ function renderShell() {
 
   document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => { go(b.dataset.go); setDrawer(false); }));
   document.getElementById("logout").addEventListener("click", logout);
+  const accountModal = document.getElementById("account-modal");
+  const closeAccount = () => { accountModal.classList.remove("open"); accountModal.setAttribute("aria-hidden", "true"); };
+  document.getElementById("account").addEventListener("click", () => {
+    accountModal.classList.add("open"); accountModal.setAttribute("aria-hidden", "false");
+    document.getElementById("current-password").focus();
+  });
+  accountModal.querySelectorAll("[data-close-account]").forEach(b => b.addEventListener("click", closeAccount));
+  accountModal.addEventListener("click", e => { if (e.target === accountModal) closeAccount(); });
+  document.getElementById("change-password-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const form = e.target;
+    if (form.newPassword.value !== form.confirmation.value)
+      return toast("Die Passwörter stimmen nicht überein.", "err");
+    try {
+      const res = await SVF.send("POST", "/api/auth/change-password", {
+        currentPassword: form.currentPassword.value,
+        newPassword: form.newPassword.value
+      });
+      SVF.setToken(res.token); SVF.setUser(res.user);
+      form.reset(); closeAccount(); toast("Passwort geändert.");
+    } catch (err) { toast(err.message, "err"); }
+  });
   document.getElementById("burger").addEventListener("click", () => setDrawer(!side.classList.contains("open")));
   document.getElementById("backdrop").addEventListener("click", () => setDrawer(false));
 }

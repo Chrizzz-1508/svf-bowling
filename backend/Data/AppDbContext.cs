@@ -27,6 +27,8 @@ public class AppDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder b)
     {
         b.Entity<AdminUser>().HasIndex(u => u.Username).IsUnique();
+        b.Entity<AdminUser>().HasIndex(u => u.PasswordResetTokenHash).IsUnique();
+        b.Entity<AdminUser>().Property(u => u.PasswordResetTokenHash).HasMaxLength(64);
 
         b.Entity<NewsArticle>().HasIndex(n => n.Slug).IsUnique();
         b.Entity<NewsArticle>().HasIndex(n => n.PublishedAt);
