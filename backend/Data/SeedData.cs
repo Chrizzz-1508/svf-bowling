@@ -236,7 +236,7 @@ public static class SeedData
     /// </summary>
     private static async Task EnsureRoster20260621Async(AppDbContext db)
     {
-        const string version = "2026-06-21";
+        const string version = "2026-06-21.2";
         var settings = await db.SiteSettings.FindAsync(1);
         if (settings is null || settings.RosterVersion == version) return;
 
@@ -293,12 +293,11 @@ public static class SeedData
             Entry("Vanessa", "Morgenstern", damen, null, 34),
             Entry("Gabriela", "Bleul", damen, null, 35, "Gabi|Bleul"),
 
-            Entry("Torsten", "Reinhardt", jugend, "Trainer", 40),
-            Entry("Tim", "Herrmann Hofmann", jugend, null, 41),
-            Entry("Maximilian", "Merz", jugend, null, 42),
-            Entry("Louis", "Diehm", jugend, null, 43, "Loius|Diehm"),
-            Entry("Hannah", "Hilbert", jugend, null, 44),
-            Entry("Haojia", "Song", jugend, null, 45),
+            Entry("Tim", "Herrmann Hofmann", jugend, null, 40),
+            Entry("Maximilian", "Merz", jugend, null, 41),
+            Entry("Louis", "Diehm", jugend, null, 42, "Loius|Diehm"),
+            Entry("Hannah", "Hilbert", jugend, null, 43),
+            Entry("Haojia", "Song", jugend, null, 44),
 
             Entry("Maja", "Mentzschel", ergaenzung, "Erwachsene", 50),
             Entry("Patrick", "Dürr", ergaenzung, "Erwachsene", 51),

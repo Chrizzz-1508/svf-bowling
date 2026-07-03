@@ -184,6 +184,20 @@ p { margin: 0 0 1rem; }
 .card .card-body p { margin: 0; color: var(--color-muted); font-size: .95rem; }
 .card .card-foot { margin-top: auto; padding-top: .6rem; }
 
+/* Mannschaftskarten: gleich hoher Kopfbereich, damit der Kader-Button nicht
+   von der Länge der bereits aufgeklappten Spielerliste verschoben wird. */
+.team-card .team-card-head {
+  min-height: 7rem;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+.team-card .card-foot { margin-top: 0; }
+
+@media (max-width: 560px) {
+  .team-card .team-card-head { min-height: 0; }
+}
+
 .feed-card {
   grid-column: span 1;
   background: var(--color-surface);

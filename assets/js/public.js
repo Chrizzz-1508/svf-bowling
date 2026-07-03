@@ -503,12 +503,14 @@ const PAGES = {
       if (!teams.length) { empty(box, "Noch keine Mannschaften angelegt."); return; }
       document.getElementById(box).innerHTML = teams.map(t => {
         const img = SVF.imageUrl(t.photoImageId);
-        return `<article class="card">
+        return `<article class="card team-card">
           ${img ? `<div class="thumb">${thumbImage(img, t.name)}</div>` : `<div class="thumb placeholder">${placeholderImage("teams", "Mannschaft")}</div>`}
           <div class="card-body">
-            ${t.league ? `<span class="badge">${escapeHtml(t.league)}</span>` : ""}
-            <h3>${escapeHtml(t.name)}</h3>
-            <p>${escapeHtml(t.description || "")}</p>
+            <div class="team-card-head">
+              ${t.league ? `<span class="badge">${escapeHtml(t.league)}</span>` : ""}
+              <h3>${escapeHtml(t.name)}</h3>
+              <p>${escapeHtml(t.description || "")}</p>
+            </div>
             <div class="card-foot"><button class="btn btn-sm btn-ghost" data-team="${t.id}">Kader anzeigen</button></div>
             <div class="roster" id="roster-${t.id}"></div>
           </div>
