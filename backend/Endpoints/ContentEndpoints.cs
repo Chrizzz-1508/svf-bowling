@@ -124,7 +124,9 @@ public static class ContentEndpoints
             var team = await db.Teams.FirstOrDefaultAsync(t => t.Id == id);
             if (team is null) return Results.NotFound();
             var players = await db.Players.Where(p => p.TeamId == id && p.IsActive)
-                .OrderBy(p => p.SortOrder).ThenBy(p => p.LastName).ToListAsync();
+                .OrderByDescending(p => p.Role != null &&
+                    (p.Role.Contains("Mannschaftsführer") || p.Role.Contains("Trainer")))
+                .ThenBy(p => p.SortOrder).ThenBy(p => p.LastName).ToListAsync();
             return Results.Ok(new { team, players });
         }).WithTags("Mannschaften");
 
@@ -159,7 +161,10 @@ public static class ContentEndpoints
         {
             var q = db.Players.AsQueryable();
             if (teamId is not null) q = q.Where(p => p.TeamId == teamId);
-            return Results.Ok(await q.OrderBy(p => p.SortOrder).ThenBy(p => p.LastName).ToListAsync());
+            return Results.Ok(await q
+                .OrderByDescending(p => p.Role != null &&
+                    (p.Role.Contains("Mannschaftsführer") || p.Role.Contains("Trainer")))
+                .ThenBy(p => p.SortOrder).ThenBy(p => p.LastName).ToListAsync());
         });
         players.MapPost("/", async (Player input, AppDbContext db) =>
         {
