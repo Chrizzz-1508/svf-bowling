@@ -432,6 +432,7 @@ table.data td.rank { font-weight: 800; color: var(--color-primary-dark); width: 
 .site-footer a { color: #aeb4bb; }
 .site-footer a:hover { color: #fff; }
 .footer-links { list-style: none; padding: 0; margin: 0; display: grid; gap: .4rem; }
+.footer-ai-notice { color: #9aa0a8; font-size: .78rem; line-height: 1.5; margin: 1.6rem 0 0; max-width: 78ch; }
 .footer-bottom { border-top: 1px solid rgba(255,255,255,.08); margin-top: 2rem; padding-top: 1.2rem; font-size: .84rem; display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 @media (max-width: 700px) { .footer-grid { grid-template-columns: 1fr; } }
 

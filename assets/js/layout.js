@@ -90,6 +90,7 @@ function renderChrome() {
           <ul class="footer-links" data-footer="contact"></ul>
         </div>
       </div>
+      <p class="footer-ai-notice">Einzelne Illustrationen auf dieser Website wurden mithilfe generativer KI erstellt und anschließend redaktionell ausgewählt bzw. bearbeitet.</p>
       <div class="footer-bottom">
         <span>© ${new Date().getFullYear()} SV Fellbach – Abteilung Bowling</span>
         <span><a href="impressum.html">Impressum</a> · <a href="datenschutz.html">Datenschutz</a> · <a href="admin/" class="footer-login">Interner Bereich</a></span>
