@@ -77,12 +77,12 @@ async function renderStandingsSection(content) {
         else openStandingsEditor(full, seasons);
       }));
       list.querySelectorAll("[data-gesamt]").forEach(b => b.addEventListener("click", async () => {
-        if (!confirm("Gesamtwertung dieser Saison aus den Monatstabellen neu berechnen?")) return;
+        if (!(await confirmDialog("Gesamtwertung", "Gesamtwertung dieser Saison aus den Monatstabellen neu berechnen?", "Neu berechnen", "Abbrechen"))) return;
         try { await mpRebuildGesamt(Number(b.dataset.gesamt)); go("standings"); }
         catch (e) { toast(e.message, "err"); }
       }));
       list.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", async () => {
-        if (!confirm("Tabelle wirklich löschen?")) return;
+        if (!(await confirmDialog("Tabelle löschen", "Tabelle wirklich löschen?", "Löschen", "Abbrechen", true))) return;
         try { await SVF.send("DELETE", `/api/admin/standings/${b.dataset.del}`); toast("Gelöscht."); go("standings"); }
         catch (e) { toast(e.message, "err"); }
       }));
@@ -245,9 +245,9 @@ async function openStandingsEditor(table, seasons) {
     initRowDrag();
   }
 
-  m.querySelector("#add-col").addEventListener("click", () => {
+  m.querySelector("#add-col").addEventListener("click", async () => {
     syncRowsFromDom();
-    const label = prompt("Name der neuen Spalte:");
+    const label = await promptDialog("Neue Spalte", "Name der neuen Spalte:", "", "Hinzufügen");
     if (!label) return;
     cols.push({ key: slugKey(label), label, type: "text" });
     renderCols(); renderRows();
@@ -265,7 +265,7 @@ async function openStandingsEditor(table, seasons) {
     syncRowsFromDom();
     // Nur nachfragen, wenn bereits Daten erfasst sind, die verloren gehen könnten.
     const hasData = rows.some(r => Object.values(r.values || {}).some(v => String(v).trim() !== ""));
-    if (hasData && !confirm("Spalten durch die Vorlage ersetzen? Vorhandene Zeilenwerte bleiben, soweit die Spalten passen.")) return;
+    if (hasData && !(await confirmDialog("Vorlage laden", "Spalten durch die Vorlage ersetzen? Vorhandene Zeilenwerte bleiben, soweit die Spalten passen.", "Ersetzen", "Abbrechen"))) return;
     cols = JSON.parse(presets[key]);
     renderCols(); renderRows();
   }
@@ -352,14 +352,14 @@ const MP_MONTH_COLS = [
 const MP_GESAMT_BASE = [
   { key: "platz", label: "Platz", type: "text" },
   { key: "spieler_in", label: "Spieler/in", type: "text" },
-  { key: "spiele", label: "Spiele Gesamt", type: "text" },
+  { key: "punkte", label: "Punkte", type: "text" },
+  { key: "spiele", label: "Anz. Spiele", type: "text" },
   { key: "starttage", label: "Starttage", type: "text" }
 ];
 const MP_GESAMT_TAIL = [
   { key: "gesamt", label: "Gesamt", type: "text" },
   { key: "schnitt", label: "Schnitt", type: "text" },
   { key: "hdc_neu", label: "Handicap aktuell", type: "text" },
-  { key: "punkte", label: "Punkte", type: "text" },
   { key: "ppt", label: "Punkte/Tag", type: "text" },
   { key: "siege", label: "Siege", type: "text" }
 ];
@@ -465,29 +465,8 @@ function mpPlaces(items) {
   return place;
 }
 
-// Jedes Dialog-Modal wird so verkabelt, dass sein Promise IMMER aufgelöst wird –
-// egal ob Button, ×, Klick daneben ODER Zwangs-Aufräumen (verwaiste Modals beim
-// Sitzungsablauf, siehe renderLogin: ruft _onForceClose auf, bevor es entfernt).
-function mpWireDialog(m, resolve, cancelValue) {
-  m._onForceClose = () => resolve(cancelValue);
-  const x = m.querySelector(".close");
-  if (x) x.addEventListener("click", () => resolve(cancelValue));
-  m.addEventListener("click", e => { if (e.target === m) resolve(cancelValue); });
-}
-
-// ---- Ja/Nein-Dialog als Modal (Ersatz für native confirm()) ----
-function mpConfirm(title, message, okLabel, cancelLabel) {
-  return new Promise(resolve => {
-    const body = `<p style="margin:.1rem 0;line-height:1.55">${escapeHtml(message)}</p>`;
-    const m = openModal(title, body,
-      `<button class="btn btn-neutral" id="mpc-no">${escapeHtml(cancelLabel || "Abbrechen")}</button><button class="btn" id="mpc-yes">${escapeHtml(okLabel || "Ja")}</button>`);
-    mpWireDialog(m, resolve, false);
-    m.querySelector("#mpc-no").addEventListener("click", () => { closeModal(m); resolve(false); });
-    m.querySelector("#mpc-yes").addEventListener("click", () => { closeModal(m); resolve(true); });
-  });
-}
-
 // ---- Sortier-Dialog beim Speichern ----
+// (confirmDialog/promptDialog/wireDialog liegen zentral in admin.js)
 function mpAskSort(defaultKey) {
   return new Promise(resolve => {
     const opts = [
@@ -504,7 +483,7 @@ function mpAskSort(defaultKey) {
       <div class="hint" style="margin-top:.4rem">Der Platz wird immer nach den Punkten vergeben (bei Gleichstand: mehr Pins inkl. HDCP). Die Sortierung bestimmt nur die Anzeige-Reihenfolge – „Punkte“ zeigt die Tabelle in Platzierungs-Reihenfolge.</div></div>`;
     const m = openModal("Tabelle sortieren", body,
       `<button class="btn btn-neutral" id="mp-sc">Abbrechen</button><button class="btn" id="mp-so">Übernehmen</button>`);
-    mpWireDialog(m, resolve, null);
+    wireDialog(m, resolve, null);
     m.querySelector("#mp-sc").addEventListener("click", () => { closeModal(m); resolve(null); });
     m.querySelector("#mp-so").addEventListener("click", () => { const v = m.querySelector("#mp-sortsel").value; closeModal(m); resolve(v); });
   });
@@ -716,7 +695,7 @@ async function openMonatspokalEditor(existing, seasons) {
     const kept = state.rows.filter(hasVals);
     const dropped = state.rows.length - kept.length;
     if (!kept.length) { toast("Kein Spieler hat Spiele eingetragen.", "err"); return; }
-    const go1 = await mpConfirm("Speichern",
+    const go1 = await confirmDialog("Speichern",
       `${kept.length} Spieler haben Werte${dropped ? ` – ${dropped} ohne Spiele werden entfernt` : ""}. Mit diesen Spielern fortfahren?`,
       "Speichern", "Abbrechen");
     if (!go1) return;
@@ -740,7 +719,7 @@ async function openMonatspokalEditor(existing, seasons) {
       else await SVF.send("POST", "/api/admin/standings", payload);
       closeModal(m);
       toast("Monatspokal gespeichert.");
-      if (await mpConfirm("Gesamtwertung", "Gesamtwertung für diese Saison jetzt aktualisieren?", "Aktualisieren", "Später")) {
+      if (await confirmDialog("Gesamtwertung", "Gesamtwertung für diese Saison jetzt aktualisieren?", "Aktualisieren", "Später")) {
         await mpRebuildGesamt(state.seasonId);
       }
       go("standings");

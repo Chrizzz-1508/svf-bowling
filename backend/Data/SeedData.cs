@@ -424,12 +424,12 @@ public static class StandingsPresets
     public static readonly string MonatspokalGesamt = Build(
         ("platz", "Platz", "text"),
         ("spieler_in", "Spieler/in", "text"),
-        ("spiele", "Spiele Gesamt", "text"),
+        ("punkte", "Punkte", "text"),
+        ("spiele", "Anz. Spiele", "text"),
         ("starttage", "Starttage", "text"),
         ("gesamt", "Gesamt", "text"),
         ("schnitt", "Schnitt", "text"),
         ("hdc_neu", "Handicap aktuell", "text"),
-        ("punkte", "Punkte", "text"),
         ("ppt", "Punkte/Tag", "text"),
         ("siege", "Siege", "text"));
 

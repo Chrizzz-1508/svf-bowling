@@ -247,6 +247,44 @@ function closeModal(m) {
   if (target) target.remove();
 }
 
+// ---------------------------------------------------------------------------
+//  Dialog-Modals (Ersatz für native confirm()/prompt())
+//  Jedes Promise wird IMMER aufgelöst – per Button, ×, Klick daneben ODER beim
+//  Zwangs-Aufräumen verwaister Modals (renderLogin ruft _onForceClose auf).
+// ---------------------------------------------------------------------------
+function wireDialog(m, resolve, cancelValue) {
+  m._onForceClose = () => resolve(cancelValue);
+  const x = m.querySelector(".close");
+  if (x) x.addEventListener("click", () => resolve(cancelValue));
+  m.addEventListener("click", e => { if (e.target === m) resolve(cancelValue); });
+}
+function confirmDialog(title, message, okLabel, cancelLabel, danger) {
+  return new Promise(resolve => {
+    const body = `<p style="margin:.1rem 0;line-height:1.55">${escapeHtml(message)}</p>`;
+    const m = openModal(title, body,
+      `<button class="btn btn-neutral" id="dlg-no">${escapeHtml(cancelLabel || "Abbrechen")}</button>` +
+      `<button class="btn ${danger ? "btn-danger" : ""}" id="dlg-yes">${escapeHtml(okLabel || "OK")}</button>`);
+    wireDialog(m, resolve, false);
+    m.querySelector("#dlg-no").addEventListener("click", () => { closeModal(m); resolve(false); });
+    m.querySelector("#dlg-yes").addEventListener("click", () => { closeModal(m); resolve(true); });
+  });
+}
+function promptDialog(title, labelText, defaultValue, okLabel) {
+  return new Promise(resolve => {
+    const body = `<div class="field"><label for="dlg-input">${escapeHtml(labelText || "")}</label>` +
+      `<input id="dlg-input" type="text" value="${escapeHtml(defaultValue || "")}"></div>`;
+    const m = openModal(title, body,
+      `<button class="btn btn-neutral" id="dlg-cancel">Abbrechen</button><button class="btn" id="dlg-ok">${escapeHtml(okLabel || "OK")}</button>`);
+    wireDialog(m, resolve, null);
+    const input = m.querySelector("#dlg-input");
+    const submit = () => { const v = input.value.trim(); closeModal(m); resolve(v === "" ? null : v); };
+    m.querySelector("#dlg-cancel").addEventListener("click", () => { closeModal(m); resolve(null); });
+    m.querySelector("#dlg-ok").addEventListener("click", submit);
+    input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
+    setTimeout(() => input.focus(), 30);
+  });
+}
+
 // Bild/Video per Klick groß anzeigen (Lightbox im Admin).
 function openAdminLightbox(src, isVideo) {
   let lb = document.querySelector(".admin-lightbox");
@@ -588,7 +626,7 @@ function bindRowActions(content, key, items) {
 
 async function deleteItem(key, id) {
   const res = RESOURCES[key];
-  if (!confirm(`Diesen Eintrag wirklich löschen?`)) return;
+  if (!(await confirmDialog("Löschen", "Diesen Eintrag wirklich löschen?", "Löschen", "Abbrechen", true))) return;
   try {
     await SVF.send("DELETE", `${res.base}/${id}`);
     if (res.onSaved) res.onSaved();
@@ -871,7 +909,7 @@ async function renderImagesSection(content) {
       catch (err) { toast(err.message, "err"); }
     }));
     content.querySelectorAll("[data-delimg]").forEach(b => b.addEventListener("click", async () => {
-      if (!confirm("Bild wirklich löschen?")) return;
+      if (!(await confirmDialog("Bild löschen", "Bild wirklich löschen?", "Löschen", "Abbrechen", true))) return;
       try { await SVF.send("DELETE", `/api/admin/images/${b.dataset.delimg}`); toast("Gelöscht."); go("images"); }
       catch (err) { toast(err.message, "err"); }
     }));
@@ -894,7 +932,7 @@ async function renderDownloadsSection(content) {
       </tbody></table></div>` : `<div class="empty">Noch keine Downloads.</div>`}`;
     content.querySelector("#dl-new").addEventListener("click", openDownloadForm);
     content.querySelectorAll("[data-deldl]").forEach(b => b.addEventListener("click", async () => {
-      if (!confirm("Datei wirklich löschen?")) return;
+      if (!(await confirmDialog("Datei löschen", "Datei wirklich löschen?", "Löschen", "Abbrechen", true))) return;
       try { await SVF.send("DELETE", `/api/admin/downloads/${b.dataset.deldl}`); toast("Gelöscht."); go("downloads"); }
       catch (e) { toast(e.message, "err"); }
     }));
@@ -939,7 +977,7 @@ async function renderDownloadsSectionV2(content) {
     content.querySelectorAll("[data-editdl]").forEach(b => b.addEventListener("click", () =>
       openDownloadFormV2(dls.find(d => d.id == b.dataset.editdl))));
     content.querySelectorAll("[data-deldl]").forEach(b => b.addEventListener("click", async () => {
-      if (!confirm("Datei wirklich löschen?")) return;
+      if (!(await confirmDialog("Datei löschen", "Datei wirklich löschen?", "Löschen", "Abbrechen", true))) return;
       try { await SVF.send("DELETE", `/api/admin/downloads/${b.dataset.deldl}`); toast("Gelöscht."); go("downloads"); }
       catch (e) { toast(e.message, "err"); }
     }));

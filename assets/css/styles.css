@@ -376,6 +376,28 @@ table.data td.rank { font-weight: 800; color: var(--color-primary-dark); width: 
 .standings-block h3 { margin-bottom: .25rem; font-size: 1.2rem; }
 .standings-block .sub { color: var(--color-muted); margin-bottom: .8rem; font-size: .92rem; }
 
+/* ---------- Breite Ergebnis-Tabellen mehr Platz geben ----------
+   Damit breite Wertungen (z. B. Monatspokal-Gesamtwertung mit vielen
+   Monatsspalten) möglichst ohne horizontales Scrollen sichtbar sind:
+   kompaktere Zellen + mehr nutzbare Breite auf großen Bildschirmen. */
+table.data { font-size: .93rem; }
+table.data th, table.data td { padding: .5rem .68rem; }
+
+@media (min-width: 1024px) {
+  /* Die Ergebnis-Seite darf breiter werden als der Standard-Container. */
+  .results-page .container { max-width: min(1440px, 95vw); }
+}
+@media (min-width: 1100px) {
+  /* Startseiten-Tabelle darf über den Container hinaus die Breite nutzen. */
+  #home-standings .table-wrap {
+    width: min(1440px, 92vw);
+    max-width: none;
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
 /* ---------- Article ---------- */
 .article { max-width: 760px; margin-inline: auto; }
 .article .hero-img { width: 100%; border-radius: var(--radius); margin: 1.2rem 0 1.6rem; box-shadow: var(--shadow); aspect-ratio: 16/9; object-fit: cover; }
