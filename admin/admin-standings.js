@@ -465,6 +465,28 @@ function mpPlaces(items) {
   return place;
 }
 
+// Jedes Dialog-Modal wird so verkabelt, dass sein Promise IMMER aufgelöst wird –
+// egal ob Button, ×, Klick daneben ODER Zwangs-Aufräumen (verwaiste Modals beim
+// Sitzungsablauf, siehe renderLogin: ruft _onForceClose auf, bevor es entfernt).
+function mpWireDialog(m, resolve, cancelValue) {
+  m._onForceClose = () => resolve(cancelValue);
+  const x = m.querySelector(".close");
+  if (x) x.addEventListener("click", () => resolve(cancelValue));
+  m.addEventListener("click", e => { if (e.target === m) resolve(cancelValue); });
+}
+
+// ---- Ja/Nein-Dialog als Modal (Ersatz für native confirm()) ----
+function mpConfirm(title, message, okLabel, cancelLabel) {
+  return new Promise(resolve => {
+    const body = `<p style="margin:.1rem 0;line-height:1.55">${escapeHtml(message)}</p>`;
+    const m = openModal(title, body,
+      `<button class="btn btn-neutral" id="mpc-no">${escapeHtml(cancelLabel || "Abbrechen")}</button><button class="btn" id="mpc-yes">${escapeHtml(okLabel || "Ja")}</button>`);
+    mpWireDialog(m, resolve, false);
+    m.querySelector("#mpc-no").addEventListener("click", () => { closeModal(m); resolve(false); });
+    m.querySelector("#mpc-yes").addEventListener("click", () => { closeModal(m); resolve(true); });
+  });
+}
+
 // ---- Sortier-Dialog beim Speichern ----
 function mpAskSort(defaultKey) {
   return new Promise(resolve => {
@@ -482,6 +504,7 @@ function mpAskSort(defaultKey) {
       <div class="hint" style="margin-top:.4rem">Der Platz wird immer nach den Punkten vergeben (bei Gleichstand: mehr Pins inkl. HDCP). Die Sortierung bestimmt nur die Anzeige-Reihenfolge – „Punkte“ zeigt die Tabelle in Platzierungs-Reihenfolge.</div></div>`;
     const m = openModal("Tabelle sortieren", body,
       `<button class="btn btn-neutral" id="mp-sc">Abbrechen</button><button class="btn" id="mp-so">Übernehmen</button>`);
+    mpWireDialog(m, resolve, null);
     m.querySelector("#mp-sc").addEventListener("click", () => { closeModal(m); resolve(null); });
     m.querySelector("#mp-so").addEventListener("click", () => { const v = m.querySelector("#mp-sortsel").value; closeModal(m); resolve(v); });
   });
@@ -693,7 +716,10 @@ async function openMonatspokalEditor(existing, seasons) {
     const kept = state.rows.filter(hasVals);
     const dropped = state.rows.length - kept.length;
     if (!kept.length) { toast("Kein Spieler hat Spiele eingetragen.", "err"); return; }
-    if (!confirm(`${kept.length} Spieler haben Werte${dropped ? ` (${dropped} ohne Spiele werden entfernt)` : ""}. Mit diesen Spielern fortfahren?`)) return;
+    const go1 = await mpConfirm("Speichern",
+      `${kept.length} Spieler haben Werte${dropped ? ` – ${dropped} ohne Spiele werden entfernt` : ""}. Mit diesen Spielern fortfahren?`,
+      "Speichern", "Abbrechen");
+    if (!go1) return;
 
     const sortKey = await mpAskSort("punkte");
     if (sortKey === null) return;
@@ -714,7 +740,7 @@ async function openMonatspokalEditor(existing, seasons) {
       else await SVF.send("POST", "/api/admin/standings", payload);
       closeModal(m);
       toast("Monatspokal gespeichert.");
-      if (confirm("Gesamtwertung für diese Saison jetzt aktualisieren?")) {
+      if (await mpConfirm("Gesamtwertung", "Gesamtwertung für diese Saison jetzt aktualisieren?", "Aktualisieren", "Später")) {
         await mpRebuildGesamt(state.seasonId);
       }
       go("standings");

@@ -308,7 +308,12 @@ function renderLogin(msg, messageType = "error") {
   // Offene Modals/Overlays liegen als Kinder von <body> (nicht in #app) und würden
   // sonst das Login überdecken – z. B. wenn die Sitzung mitten im Bearbeiten abläuft
   // und ein 401 zur Anmeldung umleitet, während der Editor noch offen ist.
-  document.querySelectorAll(".modal, .lightbox").forEach(el => el.remove());
+  // _onForceClose löst hängende Dialog-Promises (mpConfirm/mpAskSort) sauber als
+  // "abgebrochen" auf, bevor das Modal entfernt wird.
+  document.querySelectorAll(".modal, .lightbox").forEach(el => {
+    if (typeof el._onForceClose === "function") { try { el._onForceClose(); } catch { /* */ } }
+    el.remove();
+  });
   document.getElementById("app").innerHTML = `
     <div class="login-wrap">
       <form class="login-card" id="login-form">
