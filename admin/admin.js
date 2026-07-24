@@ -272,10 +272,33 @@ function openAdminLightbox(src, isVideo) {
 // ---------------------------------------------------------------------------
 //  Auth / Init
 // ---------------------------------------------------------------------------
-function init() {
+// Läuft die Sitzung während der Nutzung ab (401), direkt zur Anmeldung – statt
+// „Nicht angemeldet." im Inhalt hängen zu lassen.
+let _sessionExpiredShown = false;
+function handleSessionExpired() {
+  if (_sessionExpiredShown) return;
+  _sessionExpiredShown = true;
+  renderLogin("Deine Sitzung ist abgelaufen. Bitte erneut anmelden.");
+}
+
+async function init() {
+  _sessionExpiredShown = false;
+  SVF.onAuthError = handleSessionExpired;
   const hash = (location.hash || "").slice(1);
   if (hash.startsWith("reset=")) return renderResetPassword(hash.slice(6));
   if (!SVF.token()) return renderLogin();
+
+  // Vorhandenen Token serverseitig prüfen, bevor die angemeldete Oberfläche
+  // erscheint – sonst bliebe bei abgelaufenem Token ein „angemeldet"-Zustand hängen.
+  try {
+    const me = await SVF.get("/api/auth/me");
+    if (me) SVF.setUser(me);
+  } catch (e) {
+    // 401 hat bereits handleSessionExpired -> renderLogin ausgelöst; sonst absichern.
+    if (e && e.status === 401) return;
+    return renderLogin(e && e.message ? e.message : "Anmeldung erforderlich.");
+  }
+
   renderShell();
   const start = hash;
   go(SECTIONS.some(s => s.key === start) ? start : "dashboard");

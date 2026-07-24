@@ -30,7 +30,11 @@ const SVF = {
   },
   async _handle(r) {
     if (r.status === 401) { // Token ungültig/abgelaufen
-      if (this.token()) { this.setToken(null); this.setUser(null); }
+      const hadToken = !!this.token();
+      if (hadToken) { this.setToken(null); this.setUser(null); }
+      // Nur bei einer zuvor bestehenden Sitzung (nicht beim Login-Versuch) den
+      // Abgelaufen-Handler auslösen – der Adminbereich springt dann zur Anmeldung.
+      if (hadToken && typeof this.onAuthError === "function") this.onAuthError();
       throw new ApiError("Nicht angemeldet.", 401);
     }
     if (r.status === 204) return null;
