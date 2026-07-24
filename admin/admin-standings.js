@@ -126,7 +126,7 @@ async function openStandingsEditor(table, seasons) {
     <hr style="border:none;border-top:1px solid var(--color-border);margin:1rem 0">
     <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem">
       <strong>Spalten</strong>
-      <span class="hint">Spaltennamen frei wählbar – Vorlage wird beim Typ-Wechsel automatisch geladen.</span>
+      <span class="hint">Spaltennamen frei wählbar, per ⠿ verschiebbar – Vorlage wird beim Typ-Wechsel automatisch geladen.</span>
     </div>
     <div class="col-editor" id="cols"></div>
     <button type="button" class="btn btn-sm btn-neutral" id="add-col">+ Spalte</button>
@@ -179,19 +179,61 @@ async function openStandingsEditor(table, seasons) {
       });
     });
   }
+  // Aktuelle Spaltenreihenfolge (inkl. bearbeiteter Namen) aus dem DOM lesen.
+  function readColsFromDom() {
+    return [...colsBox.querySelectorAll(".col-chip")].map(chip => {
+      const key = chip.dataset.key;
+      const orig = cols.find(c => c.key === key) || { key, label: key, type: "text" };
+      const label = chip.querySelector("input");
+      return { ...orig, label: label ? label.value : orig.label };
+    });
+  }
+  function initColDrag() {
+    let dragEl = null;
+    colsBox.querySelectorAll(".col-chip").forEach(chip => {
+      const handle = chip.querySelector(".col-drag-handle");
+      if (!handle) return;
+      handle.addEventListener("mousedown", () => { chip.draggable = true; });
+      handle.addEventListener("touchstart", () => { chip.draggable = true; }, { passive: true });
+      chip.addEventListener("dragstart", e => {
+        dragEl = chip; chip.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        try { e.dataTransfer.setData("text/plain", "col"); } catch { /* */ }
+      });
+      chip.addEventListener("dragover", e => {
+        e.preventDefault();
+        if (!dragEl || dragEl === chip) return;
+        const rect = chip.getBoundingClientRect();
+        const after = (e.clientX - rect.left) > rect.width / 2;
+        chip.parentNode.insertBefore(dragEl, after ? chip.nextSibling : chip);
+      });
+      chip.addEventListener("dragend", () => {
+        chip.classList.remove("dragging"); chip.draggable = false;
+        if (!dragEl) return;
+        dragEl = null;
+        syncRowsFromDom();
+        cols = readColsFromDom();
+        renderCols(); renderRows();
+      });
+    });
+  }
   function renderCols() {
-    colsBox.innerHTML = cols.map((c, i) =>
-      `<span class="col-chip"><input value="${escapeHtml(c.label)}" data-coli="${i}"><button type="button" class="x" data-rmcol="${i}">×</button></span>`).join("");
-    colsBox.querySelectorAll("[data-coli]").forEach(inp => inp.addEventListener("change", () => {
-      cols[inp.dataset.coli].label = inp.value; renderRows();
+    colsBox.innerHTML = cols.map(c =>
+      `<span class="col-chip" data-key="${escapeHtml(c.key)}"><span class="col-drag-handle" title="Ziehen zum Verschieben">⠿</span><input value="${escapeHtml(c.label)}" data-key="${escapeHtml(c.key)}"><button type="button" class="x" data-rmcol="${escapeHtml(c.key)}">×</button></span>`).join("");
+    colsBox.querySelectorAll(".col-chip input").forEach(inp => inp.addEventListener("change", () => {
+      const c = cols.find(x => x.key === inp.dataset.key);
+      if (c) { c.label = inp.value; renderRows(); }
     }));
     colsBox.querySelectorAll("[data-rmcol]").forEach(b => b.addEventListener("click", () => {
       syncRowsFromDom();
-      const c = cols[b.dataset.rmcol];
-      cols.splice(b.dataset.rmcol, 1);
-      rows.forEach(r => delete r.values[c.key]);
+      const key = b.dataset.rmcol;
+      const idx = cols.findIndex(x => x.key === key);
+      if (idx < 0) return;
+      cols.splice(idx, 1);
+      rows.forEach(r => delete r.values[key]);
       renderCols(); renderRows();
     }));
+    initColDrag();
   }
   function renderRows() {
     const head = `<thead><tr><th class="drag-cell"></th><th class="rownum">#</th>${cols.map(c => `<th>${escapeHtml(c.label)}</th>`).join("")}<th></th></tr></thead>`;
