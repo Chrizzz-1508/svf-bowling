@@ -329,9 +329,11 @@ function mpNum(s) {
   return isNaN(n) ? NaN : n;
 }
 function mpFmt2(n) { return (Math.round(n * 100) / 100).toFixed(2).replace(".", ","); }
-// Rohes Handicap aus dem Schnitt: Pro-Spiel-Handicap runden, dann ×3 (verifiziert).
-function mpHdcpRaw(avg) { return Math.max(0, Math.round((200 - avg) * 0.8) * 3); }
-// Handicap aktuell (Gesamtwertung) – wie in den Daten bei 150 gedeckelt.
+// Handicap aus dem Schnitt: (200 − Ø) × 0,8 × 3 = × 2,4, am Ende gerundet (NICHT das
+// Pro-Spiel-Handicap zwischenrunden!). An den Spielzetteln + Online-Monatsdaten
+// verifiziert (Sabrina/Udo, u. a. Juni 133, Jan 176, März 146). Ungedeckelt.
+function mpHdcpRaw(avg) { return Math.max(0, Math.round((200 - avg) * 2.4)); }
+// Handicap aktuell (Gesamtwertung) – dieselbe Formel, bei 150 gedeckelt.
 function mpHdcp(avg) { return Math.min(150, mpHdcpRaw(avg)); }
 function mpMonthName(title) {
   const raw = String(title || "").split("–").pop().trim();
