@@ -501,14 +501,18 @@ function mpFinalizeRows(rowValues, sortKey) {
     v.punkte = (v.punkte || "") === "" ? "" : String(v.punkte).trim();
     return v;
   });
-  // Platz nach Pins inkl. HDCP (unabhängig von der Anzeige-Sortierung)
+  // Platz = Punkte, bei Gleichstand mehr Pins inkl. HDCP (dann niedrigeres Handicap).
   const rank = mpPlaces(out.map(v => ({ punkte: mpNum(v.punkte), pih: mpNum(v.pins_inkl_hdcp), hdcp: mpNum(v.hdcp) })));
   out.forEach((v, i) => { v.platz = rank[i] ? rank[i] + "." : ""; });
-  // Anzeige-Sortierung
-  const asc = sortKey === "spieler_in";
-  out.sort((a, b) => asc
-    ? String(a[sortKey] || "").localeCompare(String(b[sortKey] || ""), "de")
-    : ((mpNum(b[sortKey]) || -Infinity) - (mpNum(a[sortKey]) || -Infinity)));
+  // Anzeige-Sortierung. Standard "punkte" = Platzierungs-Reihenfolge
+  // (erst Punkte, bei Gleichstand die Pins inkl. HDCP) – identisch zur Platz-Spalte.
+  if (sortKey === "punkte") {
+    out.sort((a, b) => (parseInt(a.platz, 10) || 9999) - (parseInt(b.platz, 10) || 9999));
+  } else if (sortKey === "spieler_in") {
+    out.sort((a, b) => String(a.spieler_in || "").localeCompare(String(b.spieler_in || ""), "de"));
+  } else {
+    out.sort((a, b) => (mpNum(b[sortKey]) || -Infinity) - (mpNum(a[sortKey]) || -Infinity));
+  }
   return out;
 }
 
@@ -801,11 +805,15 @@ async function mpRebuildGesamt(seasonId) {
     monthsWithData.forEach(mn => { v[mpMonthKey(mn)] = a.byMonth[mn] ?? ""; });
     return v;
   });
-  // Sortierung: Punkte, dann Gesamt (Pins) – Platz als Wettkampf-Rang.
-  rows.sort((a, b) => (mpNum(b.punkte) - mpNum(a.punkte)) || (mpNum(b.gesamt) - mpNum(a.gesamt)));
+  // Sortierung: Punkte, bei Gleichstand mehr Siege, dann Gesamtpinzahl.
+  const siegeNum = v => v.siege === "--" ? 0 : (mpNum(v.siege) || 0);
+  rows.sort((a, b) =>
+    (mpNum(b.punkte) - mpNum(a.punkte)) ||
+    (siegeNum(b) - siegeNum(a)) ||
+    (mpNum(b.gesamt) - mpNum(a.gesamt)));
   let lastKey = null, lastRank = 0;
   rows.forEach((v, i) => {
-    const key = `${v.punkte}|${v.gesamt}`;
+    const key = `${v.punkte}|${siegeNum(v)}|${v.gesamt}`;
     const r = (lastKey !== null && key === lastKey) ? lastRank : i + 1;
     v.platz = r + "."; lastKey = key; lastRank = r;
   });
