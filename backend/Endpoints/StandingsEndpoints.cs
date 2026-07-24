@@ -105,6 +105,7 @@ public static class StandingsEndpoints
         {
             Liga = StandingsPresets.Liga,
             Monatspokal = StandingsPresets.Monatspokal,
+            MonatspokalGesamt = StandingsPresets.MonatspokalGesamt,
             Vereinsmeisterschaft = StandingsPresets.Vereinsmeisterschaft
         }));
     }

@@ -126,7 +126,8 @@ const RESOURCES = {
     columns: [
       { label: "Name", render: p => escapeHtml(p.firstName + " " + p.lastName) },
       { label: "Mannschaft", render: p => escapeHtml(teamName(p.teamId)) },
-      { label: "Rolle", render: p => escapeHtml(p.role || "—") }
+      { label: "Rolle", render: p => escapeHtml(p.role || "—") },
+      { label: "Monatspokal", render: p => tag(p.monatspokal, "Ja", "—") }
     ],
     defaults: { isActive: true },
     fields: [
@@ -134,6 +135,7 @@ const RESOURCES = {
       { name: "lastName", label: "Nachname", type: "text", required: true },
       { name: "teamId", label: "Mannschaft", type: "select", optionsFrom: async () => opt(await loadTeams(), "name") },
       { name: "role", label: "Rolle (optional)", type: "text", hint: "z. B. Mannschaftsführer" },
+      { name: "monatspokal", label: "Nimmt am Monatspokal teil", type: "checkbox", hint: "Wird beim Anlegen einer neuen Monatspokal-Tabelle automatisch als Zeile vorbefüllt." },
       { name: "isActive", label: "Aktiv", type: "checkbox" }
     ]
   },

@@ -27,6 +27,34 @@ public static class SeedData
         await db.SaveChangesAsync();
         await EnsureRoster20260621Async(db);
         await db.SaveChangesAsync();
+        await EnsureMonatspokalFlagsAsync(db);
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Setzt einmalig das Monatspokal-Flag für die Stamm-Teilnehmer (abgeleitet aus den
+    /// Saisons 2024/25 &amp; 2025/26). Läuft nur, solange noch kein Spieler markiert ist –
+    /// spätere Änderungen im Adminbereich bleiben damit erhalten.
+    /// </summary>
+    private static async Task EnsureMonatspokalFlagsAsync(AppDbContext db)
+    {
+        if (await db.Players.AnyAsync(p => p.Monatspokal)) return;
+
+        // Kanonische Namen wie in der Spielerliste (EnsureRoster…).
+        var regulars = new (string First, string Last)[]
+        {
+            ("Kay", "Kiesshauer"), ("Ben", "Koch"), ("Hans-Jürgen", "Oehlrich"),
+            ("Udo", "Thoma"), ("Patrick", "Bertsch"), ("Michael", "Schneider"),
+            ("Sabrina", "Thoma"), ("Marc", "Vogelwaid"), ("Sarah", "Vogelwaid"),
+            ("Christian", "Schreier"), ("Bernd", "Kopriva"), ("Felix", "Schuler"),
+            ("Fynn", "Schuler"), ("Samantha", "Fabach"), ("Norbert", "Herkner"),
+            ("Cordelia", "Fabach"), ("Christiane", "Discher"), ("Kathleen", "Schmorde"),
+            ("Alexandra", "Barth"), ("Iris", "Weinmann"), ("Vanessa", "Morgenstern"),
+            ("Gabriela", "Bleul"), ("Oli", "Bleul")
+        };
+        var set = regulars.ToHashSet();
+        foreach (var p in await db.Players.ToListAsync())
+            if (set.Contains((p.FirstName, p.LastName))) p.Monatspokal = true;
     }
 
     private static async Task EnsureAdminAsync(AppDbContext db, IConfiguration config)
@@ -221,8 +249,8 @@ public static class SeedData
             SortOrder = 1,
             Rows = new List<StandingsRow>
             {
-                DemoRow(1, "{\"platz\":\"1\",\"spieler\":\"Max Mustermann\",\"punkte\":\"10\",\"pins\":\"612\",\"schnitt\":\"204\",\"hdc_neu\":\"12\"}"),
-                DemoRow(2, "{\"platz\":\"2\",\"spieler\":\"Erika Beispiel\",\"punkte\":\"8\",\"pins\":\"588\",\"schnitt\":\"196\",\"hdc_neu\":\"18\"}")
+                DemoRow(1, "{\"platz\":\"1.\",\"spieler_in\":\"Max Mustermann\",\"1_spiel\":\"210\",\"2_spiel\":\"195\",\"3_spiel\":\"207\",\"gesamt\":\"612\",\"schnitt\":\"204,00\",\"hdcp\":\"0\",\"pins_inkl_hdcp\":\"612\",\"punkte\":\"10\"}"),
+                DemoRow(2, "{\"platz\":\"2.\",\"spieler_in\":\"Erika Beispiel\",\"1_spiel\":\"188\",\"2_spiel\":\"210\",\"3_spiel\":\"190\",\"gesamt\":\"588\",\"schnitt\":\"196,00\",\"hdcp\":\"18\",\"pins_inkl_hdcp\":\"606\",\"punkte\":\"8\"}")
             }
         });
     }
@@ -381,12 +409,29 @@ public static class StandingsPresets
         ("pins", "Pins", "number"));
 
     public static readonly string Monatspokal = Build(
-        ("platz", "Platz", "number"),
-        ("spieler", "Spieler/in", "text"),
-        ("punkte", "Punkte", "number"),
-        ("pins", "Pins", "number"),
-        ("schnitt", "Schnitt", "number"),
-        ("hdc_neu", "HDC neu", "number"));
+        ("platz", "Platz", "text"),
+        ("spieler_in", "Spieler/in", "text"),
+        ("1_spiel", "1.Spiel", "text"),
+        ("2_spiel", "2.Spiel", "text"),
+        ("3_spiel", "3.Spiel", "text"),
+        ("gesamt", "Gesamt", "text"),
+        ("schnitt", "Schnitt", "text"),
+        ("hdcp", "HDCP", "text"),
+        ("pins_inkl_hdcp", "Pins inkl. HDCP", "text"),
+        ("punkte", "Punkte", "text"));
+
+    /// <summary>Gesamtwertung des Monatspokals – Monatsspalten (Pins inkl. HDCP) kommen dynamisch dazu.</summary>
+    public static readonly string MonatspokalGesamt = Build(
+        ("platz", "Platz", "text"),
+        ("spieler_in", "Spieler/in", "text"),
+        ("spiele", "Spiele Gesamt", "text"),
+        ("starttage", "Starttage", "text"),
+        ("gesamt", "Gesamt", "text"),
+        ("schnitt", "Schnitt", "text"),
+        ("hdc_neu", "Handicap aktuell", "text"),
+        ("punkte", "Punkte", "text"),
+        ("ppt", "Punkte/Tag", "text"),
+        ("siege", "Siege", "text"));
 
     public static readonly string Vereinsmeisterschaft = Build(
         ("platz", "Platz", "number"),

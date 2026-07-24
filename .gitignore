@@ -1,3 +1,6 @@
 # Test-/Hilfsdateien
 admin/_boot.html
 .DS_Store
+
+# Lokale Daten-Sicherungen (nicht ins Pages-Artefakt)
+backups/

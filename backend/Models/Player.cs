@@ -10,4 +10,7 @@ public class Player
     public string? Role { get; set; }
     public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
+
+    /// <summary>Nimmt regelmäßig am Monatspokal teil – steuert die Vorbefüllung der Monatspokal-Tabellen.</summary>
+    public bool Monatspokal { get; set; }
 }

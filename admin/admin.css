@@ -105,6 +105,13 @@
 .rows-table th.drag-cell, .rows-table td.drag-cell { width: 34px; text-align: center; background: var(--color-bg-alt); }
 .rows-table .drag-handle { font-size: 1rem; }
 
+/* Monatspokal-Editor: berechnete (nicht editierbare) Zellen + kompakte Zahlenfelder */
+.mp-table td.mp-calc { background: var(--color-bg-alt); text-align: center; color: var(--color-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mp-table input.mp-num { text-align: center; font-variant-numeric: tabular-nums; }
+.mp-table input.mp-name { min-width: 9rem; }
+.mp-table th { white-space: nowrap; font-size: .82rem; }
+.mp-table td.rownum[data-calc="platz"] { font-weight: 600; color: var(--color-text); }
+
 /* ---- Toast ---- */
 .toast-host { position: fixed; bottom: 20px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: .5rem; }
 .toast { background: var(--color-ink); color: #fff; padding: .7rem 1.1rem; border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); font-size: .9rem; }

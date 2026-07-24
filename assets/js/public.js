@@ -172,7 +172,22 @@ function resultEntryLabel(table, type) {
   return label || table.title || "Tabelle";
 }
 
+// Monatspokal-Monate in Saison-Reihenfolge (Dezember zuerst).
+const MP_MONTH_ORDER = ["Dezember", "Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November"];
+
 function sortResultEntries(list, type) {
+  // Monatspokal: Gesamtwertung zuerst, danach die Monate in Saison-Reihenfolge –
+  // unabhängig davon, wann die Tabellen angelegt wurden.
+  if (type === "Monatspokal") {
+    const rank = t => {
+      const label = resultEntryLabel(t, type);
+      if (/Gesamt/i.test(label)) return -1;
+      const idx = MP_MONTH_ORDER.indexOf(label);
+      return idx >= 0 ? idx : 99;
+    };
+    return [...list].sort((a, b) =>
+      rank(a) - rank(b) || (a.sortOrder || 0) - (b.sortOrder || 0));
+  }
   return [...list].sort((a, b) =>
     (a.sortOrder || 0) - (b.sortOrder || 0) ||
     resultEntryLabel(a, type).localeCompare(resultEntryLabel(b, type), "de-DE", { numeric: true })

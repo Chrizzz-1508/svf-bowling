@@ -177,6 +177,7 @@ public static class ContentEndpoints
             if (p is null) return Results.NotFound();
             p.FirstName = input.FirstName; p.LastName = input.LastName; p.TeamId = input.TeamId;
             p.Role = input.Role; p.SortOrder = input.SortOrder; p.IsActive = input.IsActive;
+            p.Monatspokal = input.Monatspokal;
             await db.SaveChangesAsync();
             return Results.Ok(p);
         });
