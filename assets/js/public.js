@@ -161,8 +161,10 @@ function resultTypeDef(type) {
   return RESULT_TYPE_DEFS.find(d => d.key === normalizeResultType(type)) || RESULT_TYPE_DEFS[0];
 }
 
+// Neueste Saison zuerst. Konvention (wie /api/seasons): kleinerer sortOrder = neuer
+// (2026/27 = −1). Deshalb sortOrder AUFSTEIGEND, danach Name absteigend (2025/26 vor 2024/25).
 function sortSeasonsDesc(a, b) {
-  return (b.sortOrder || 0) - (a.sortOrder || 0) || b.name.localeCompare(a.name, "de-DE", { numeric: true });
+  return (a.sortOrder || 0) - (b.sortOrder || 0) || b.name.localeCompare(a.name, "de-DE", { numeric: true });
 }
 
 function resultEntryLabel(table, type) {
