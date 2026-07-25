@@ -63,6 +63,7 @@ async function renderStandingsSection(content) {
             <td>${tag(t.isPublished, "Sichtbar", "Versteckt")}</td>
             <td class="actions-cell"><div class="actions">
               <button class="btn btn-sm btn-neutral" data-edit="${t.id}">Bearbeiten</button>
+              <button class="btn btn-sm btn-neutral" data-copy="${t.id}" title="Kopie mit allen Spalten und Zeilen anlegen">Duplizieren</button>
               ${t.type === "Monatspokal" && t.seasonId ? `<button class="btn btn-sm btn-neutral" data-gesamt="${t.seasonId}" title="Gesamtwertung dieser Saison neu berechnen">Σ Gesamt</button>` : ""}
               <button class="btn btn-sm btn-danger" data-del="${t.id}">Löschen</button>
             </div></td></tr>`).join("")}
@@ -75,6 +76,15 @@ async function renderStandingsSection(content) {
         // Monats-Tabellen bekommen den geführten Editor; Gesamtwertung & andere Typen den generischen.
         if (full.type === "Monatspokal" && mpMonthIndex(full.title) >= 0) openMonatspokalEditor(full, seasons);
         else openStandingsEditor(full, seasons);
+      }));
+      // Duplizieren: Vorlage komplett laden und als NEUE (noch ungespeicherte) Tabelle
+      // im generischen Editor öffnen – auch für Monatspokal, damit Titel/Saison frei
+      // anpassbar bleiben.
+      list.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", async () => {
+        try {
+          const full = await SVF.get(`/api/admin/standings/${b.dataset.copy}`);
+          openStandingsEditor(full, seasons, { duplicate: true });
+        } catch (e) { toast(e.message, "err"); }
       }));
       list.querySelectorAll("[data-gesamt]").forEach(b => b.addEventListener("click", async () => {
         if (!(await confirmDialog("Gesamtwertung", "Gesamtwertung dieser Saison aus den Monatstabellen neu berechnen?", "Neu berechnen", "Abbrechen"))) return;
@@ -95,33 +105,38 @@ async function renderStandingsSection(content) {
   } catch (e) { content.innerHTML = `<div class="error-box">${escapeHtml(e.message)}</div>`; }
 }
 
-async function openStandingsEditor(table, seasons) {
-  const isEdit = !!table;
+// opts.duplicate = true → `table` dient nur als Vorlage; gespeichert wird eine neue Tabelle.
+async function openStandingsEditor(table, seasons, opts = {}) {
+  const src = table;                          // Vorlage: bearbeiten ODER duplizieren
+  const isCopy = !!src && !!opts.duplicate;
+  const isEdit = !!src && !isCopy;
   let cols = [];
   let rows = [];
-  if (isEdit) {
-    try { cols = JSON.parse(table.columnsJson || "[]"); } catch { cols = []; }
-    rows = (table.rows || []).map(r => ({ values: safeJson(r.valuesJson) || {} }));
+  if (src) {
+    try { cols = JSON.parse(src.columnsJson || "[]"); } catch { cols = []; }
+    rows = (src.rows || []).map(r => ({ values: safeJson(r.valuesJson) || {} }));
   } else {
     cols = JSON.parse(PRESET_FALLBACK.Liga);
   }
 
   // Neue Tabellen: neueste Saison vorauswählen (seasons kommt bereits neueste-zuerst vom Server).
-  const defaultSeasonId = isEdit ? table.seasonId : (seasons[0] ? seasons[0].id : null);
+  const defaultSeasonId = src ? src.seasonId : (seasons[0] ? seasons[0].id : null);
   const seasonOpts = `<option value="">– keine Saison –</option>` +
     seasons.map(s => `<option value="${s.id}" ${s.id === defaultSeasonId ? "selected" : ""}>${escapeHtml(s.name)}</option>`).join("");
-  const typeOpts = STANDINGS_TYPES.map(t => `<option value="${t}" ${isEdit && table.type === t ? "selected" : ""}>${t}</option>`).join("");
+  const typeOpts = STANDINGS_TYPES.map(t => `<option value="${t}" ${src && src.type === t ? "selected" : ""}>${t}</option>`).join("");
+  const initialTitle = isCopy ? `${src.title} (Kopie)` : (src ? src.title : "");
 
   const body = `
+    ${isCopy ? `<div class="hint" style="margin-bottom:.8rem">Kopie von „${escapeHtml(src.title)}“ – die Vorlage bleibt unverändert. Titel und Saison anpassen, dann speichern.</div>` : ""}
     <div class="row">
-      <div class="field"><label>Titel *</label><input type="text" id="st-title" value="${isEdit ? escapeHtml(table.title) : ""}" placeholder="z. B. Oberliga – 1. Herren"></div>
-      <div class="field"><label>Untertitel</label><input type="text" id="st-sub" value="${isEdit ? escapeHtml(table.subtitle || "") : ""}"></div>
+      <div class="field"><label>Titel *</label><input type="text" id="st-title" value="${escapeHtml(initialTitle)}" placeholder="z. B. Oberliga – 1. Herren"></div>
+      <div class="field"><label>Untertitel</label><input type="text" id="st-sub" value="${src ? escapeHtml(src.subtitle || "") : ""}"></div>
     </div>
     <div class="row">
       <div class="field"><label>Typ</label><select id="st-type">${typeOpts}</select></div>
       <div class="field"><label>Saison</label><select id="st-season">${seasonOpts}</select></div>
     </div>
-    <div class="field"><label class="check"><input type="checkbox" id="st-pub" ${(!isEdit || table.isPublished) ? "checked" : ""}> Sichtbar auf der Website</label></div>
+    <div class="field"><label class="check"><input type="checkbox" id="st-pub" ${(!src || src.isPublished) ? "checked" : ""}> Sichtbar auf der Website</label></div>
 
     <hr style="border:none;border-top:1px solid var(--color-border);margin:1rem 0">
     <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem">
@@ -135,7 +150,7 @@ async function openStandingsEditor(table, seasons) {
     <div style="overflow-x:auto"><table class="rows-table" id="rows"></table></div>
     <button type="button" class="btn btn-sm btn-neutral" id="add-row" style="margin-top:.6rem">+ Zeile</button>`;
 
-  const m = openModal(isEdit ? "Tabelle bearbeiten" : "Neue Ergebnis-Tabelle", body,
+  const m = openModal(isCopy ? "Tabelle duplizieren" : isEdit ? "Tabelle bearbeiten" : "Neue Ergebnis-Tabelle", body,
     `<button class="btn btn-neutral" id="cancel">Abbrechen</button><button class="btn" id="save">Speichern</button>`, true);
 
   const colsBox = m.querySelector("#cols");
@@ -280,7 +295,7 @@ async function openStandingsEditor(table, seasons) {
     // Bestehende Tabellen behalten ihre Reihenfolge; neue landen ganz oben
     let sortOrder;
     if (isEdit) {
-      sortOrder = table.sortOrder || 0;
+      sortOrder = src.sortOrder || 0;
     } else {
       const all = await SVF.get("/api/admin/standings").catch(() => []);
       const sorts = all.map(t => t.sortOrder ?? 0);
@@ -297,9 +312,9 @@ async function openStandingsEditor(table, seasons) {
       rows: rows.map((r, i) => ({ sortOrder: i, valuesJson: JSON.stringify(r.values || {}) }))
     };
     try {
-      if (isEdit) await SVF.send("PUT", `/api/admin/standings/${table.id}`, payload);
+      if (isEdit) await SVF.send("PUT", `/api/admin/standings/${src.id}`, payload);
       else await SVF.send("POST", "/api/admin/standings", payload);
-      closeModal(); toast("Gespeichert."); go("standings");
+      closeModal(); toast(isCopy ? "Kopie angelegt." : "Gespeichert."); go("standings");
     } catch (e) { toast(e.message, "err"); }
   });
 

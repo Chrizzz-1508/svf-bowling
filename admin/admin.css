@@ -93,6 +93,9 @@
 .img-lib .pick.sel { border-color: var(--color-primary); }
 
 /* ---- Standings editor ---- */
+/* Freistehender Hinweistext (`.field .hint` aus styles.css bleibt davon unberührt) */
+.hint { font-size: .8rem; color: var(--color-muted); }
+.modal-body > .hint { display: block; background: var(--color-bg-alt); border-left: 3px solid var(--color-primary); padding: .5rem .7rem; border-radius: var(--radius-sm); }
 .col-editor { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .8rem; }
 .col-chip { display: flex; align-items: center; gap: .3rem; background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: .25rem .3rem; }
 .col-chip input { border: 0; font: inherit; width: 90px; padding: .1rem; }
