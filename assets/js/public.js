@@ -105,7 +105,10 @@ function renderStandings(table, hideTitle) {
   const head = columns.map(c => `<th>${escapeHtml(c.label || c.key)}</th>`).join("");
   const body = (table.rows || []).map(r => {
     const v = safeJson(r.valuesJson) || {};
-    return "<tr>" + columns.map((c, i) =>
+    // Zeilen mit _summary sind Summen-/Schnitt-Zeilen: hervorgehoben und beim
+    // Sortieren immer unten (sonst rutschen sie mitten in die Tabelle).
+    const isSum = v._summary === "1";
+    return `<tr${isSum ? ' class="row-summary" data-fixed="1"' : ""}>` + columns.map((c, i) =>
       `<td${i === 0 ? ' class="rank"' : ""}>${escapeHtml(v[c.key] ?? "")}</td>`).join("") + "</tr>";
   }).join("");
   return `<div class="standings-block">
@@ -135,7 +138,9 @@ document.addEventListener("click", e => {
   th.classList.add(dir === 1 ? "sort-asc" : "sort-desc");
 
   const num = s => parseFloat(String(s).replace(/\./g, "").replace(",", "."));
-  const rows = [...tbody.querySelectorAll("tr")];
+  const all = [...tbody.querySelectorAll("tr")];
+  const fixed = all.filter(r => r.dataset.fixed === "1");   // Summenzeilen bleiben unten
+  const rows = all.filter(r => r.dataset.fixed !== "1");
   rows.sort((a, b) => {
     const av = a.children[idx]?.textContent.trim() ?? "";
     const bv = b.children[idx]?.textContent.trim() ?? "";
@@ -144,10 +149,12 @@ document.addEventListener("click", e => {
     return av.localeCompare(bv, "de-DE", { numeric: true }) * dir;
   });
   rows.forEach(r => tbody.appendChild(r));
+  fixed.forEach(r => tbody.appendChild(r));
 });
 
 const RESULT_TYPE_DEFS = [
   { key: "Liga", label: "Liga", entryLabel: "Tabelle" },
+  { key: "Liga-Spieltag", label: "Liga – Spieltage", entryLabel: "Spieltag" },
   { key: "Monatspokal", label: "Monatspokal", entryLabel: "Monat" },
   { key: "Vereinsmeisterschaft", label: "Vereinsmeisterschaft", entryLabel: "Wertung" },
   { key: "Custom", label: "Weitere", entryLabel: "Tabelle" }

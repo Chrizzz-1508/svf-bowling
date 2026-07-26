@@ -371,6 +371,10 @@ table.data tbody tr:last-child td { border-bottom: 0; }
 table.data tbody tr:nth-child(even) { background: #fbfcfd; }
 table.data tbody tr:hover { background: var(--color-accent-soft); }
 table.data td.rank { font-weight: 800; color: var(--color-primary-dark); width: 1%; }
+/* Summen-/Schnitt-Zeilen (z. B. Liga-Spieltag) vom Rest absetzen */
+table.data tbody tr.row-summary { background: var(--color-bg-alt); font-weight: 700; }
+table.data tbody tr.row-summary:first-of-type td { border-top: 2px solid var(--color-primary); }
+table.data tbody tr.row-summary:hover { background: var(--color-bg-alt); }
 
 .standings-block { margin-bottom: 2.2rem; }
 .standings-block h3 { margin-bottom: .25rem; font-size: 1.2rem; }

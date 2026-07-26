@@ -2,7 +2,7 @@
 //  Spezial-Editor für die generischen Ergebnis-Tabellen (Liga, Monatspokal,
 //  Vereinsmeisterschaft und beliebige eigene Tabellen).
 // ============================================================================
-const STANDINGS_TYPES = ["Liga", "Monatspokal", "Vereinsmeisterschaft", "Custom"];
+const STANDINGS_TYPES = ["Liga", "Liga-Spieltag", "Monatspokal", "Vereinsmeisterschaft", "Custom"];
 
 function slugKey(label) {
   return (label || "").toString().toLowerCase()
@@ -38,6 +38,7 @@ async function renderStandingsSection(content) {
 
     content.innerHTML = `
       <div class="toolbar">
+        <button class="btn" id="new-lg">+ Neuer Liga-Spieltag</button>
         <button class="btn" id="new-mp">+ Neuer Monatspokal</button>
         <button class="btn btn-neutral" id="new-table">+ Neue Tabelle</button>
         <label class="select-wrap" title="Nach Saison filtern"><select id="st-season">${options}</select></label>
@@ -73,8 +74,10 @@ async function renderStandingsSection(content) {
       initDragSort(list.querySelector(".atable tbody"), "standings");
       list.querySelectorAll("[data-edit]").forEach(b => b.addEventListener("click", async () => {
         const full = await SVF.get(`/api/admin/standings/${b.dataset.edit}`);
-        // Monats-Tabellen bekommen den geführten Editor; Gesamtwertung & andere Typen den generischen.
+        // Monats- und Liga-Spieltag-Tabellen bekommen den geführten Editor;
+        // Gesamtwertung & andere Typen den generischen.
         if (full.type === "Monatspokal" && mpMonthIndex(full.title) >= 0) openMonatspokalEditor(full, seasons);
+        else if (full.type === LG_TYPE) openLigaSpieltagEditor(full, seasons);
         else openStandingsEditor(full, seasons);
       }));
       // Duplizieren: Vorlage komplett laden und als NEUE (noch ungespeicherte) Tabelle
@@ -98,6 +101,7 @@ async function renderStandingsSection(content) {
       }));
     };
 
+    content.querySelector("#new-lg").addEventListener("click", () => openLigaSpieltagEditor(null, seasons));
     content.querySelector("#new-mp").addEventListener("click", () => openMonatspokalEditor(null, seasons));
     content.querySelector("#new-table").addEventListener("click", () => openStandingsEditor(null, seasons));
     content.querySelector("#st-season").addEventListener("change", e => { standingsSeasonFilter = e.target.value; renderList(); });
@@ -846,4 +850,398 @@ async function mpRebuildGesamt(seasonId) {
   };
   if (existing) { await SVF.send("PUT", `/api/admin/standings/${existing.id}`, payload); toast("Gesamtwertung aktualisiert."); }
   else { await SVF.send("POST", "/api/admin/standings", payload); toast("Gesamtwertung angelegt."); }
+}
+
+// ============================================================================
+//  Liga-Spieltag – geführter Editor als Abbild des Spielzettels
+//  Eingetippt werden nur Gegner, Gegner-Ergebnis und die Einzelergebnisse;
+//  eigenes Ergebnis, Punkte, Summen, Spiele und Schnitt entstehen daraus.
+// ============================================================================
+const LG_TYPE = "Liga-Spieltag";
+const LG_DEFAULT_GAMES = 5;
+const LG_MAX_GAMES = 10;
+const LG_MAX_PLAYERS = 8;
+const LG_SUMMARY_LABELS = { summe: "Summe", spiele: "Spiele", schnitt: "Schnitt" };
+
+function lgPlayerKey(name) { return "p_" + slugKey(name); }
+function lgFmt1(n) { return (Math.round(n * 10) / 10).toFixed(1).replace(".", ","); }
+
+// Punkte eines Spiels: gewonnen 2 · unentschieden 1 · verloren 0 · Blind (kein
+// Gegner-Ergebnis eingetragen) 2.
+function lgPoints(own, opp) {
+  if (isNaN(own)) return NaN;
+  if (isNaN(opp)) return 2;
+  return own > opp ? 2 : own === opp ? 1 : 0;
+}
+
+function lgColumns(players) {
+  return [
+    { key: "spiel", label: "Spiel", type: "text" },
+    { key: "gegner", label: "Gegner", type: "text" },
+    { key: "gegner_erg", label: "Gegner Ergebnis", type: "text" },
+    ...players.map(p => ({ key: lgPlayerKey(p), label: p, type: "text" })),
+    { key: "eigenes_erg", label: "Eigenes Ergebnis", type: "text" },
+    { key: "punkte", label: "Punkte", type: "text" }
+  ];
+}
+
+// Kennzahlen eines Spieltags aus den erfassten Spielen.
+function lgCompute(players, games) {
+  const perGame = games.map(g => {
+    const scores = players.map((_, i) => mpNum(g.scores[i]));
+    const played = scores.filter(v => !isNaN(v));
+    const own = played.length ? played.reduce((a, v) => a + v, 0) : NaN;
+    const opp = mpNum(g.gegnerErg);
+    return { scores, own, punkte: lgPoints(own, opp) };
+  });
+  const withData = perGame.filter(g => !isNaN(g.own));
+  const perPlayer = players.map((_, i) => {
+    const vals = perGame.map(g => g.scores[i]).filter(v => !isNaN(v));
+    const pins = vals.reduce((a, v) => a + v, 0);
+    return { spiele: vals.length, pins, schnitt: vals.length ? pins / vals.length : NaN };
+  });
+  const gamesTotal = perPlayer.reduce((a, p) => a + p.spiele, 0);
+  const pinsTotal = perPlayer.reduce((a, p) => a + p.pins, 0);
+  return {
+    perGame, perPlayer,
+    gegnerSumme: games.reduce((a, g) => a + (mpNum(g.gegnerErg) || 0), 0),
+    pinsTotal,
+    punkteTotal: withData.reduce((a, g) => a + (isNaN(g.punkte) ? 0 : g.punkte), 0),
+    spieleTotal: withData.length,
+    einzelspiele: gamesTotal,
+    schnittTotal: gamesTotal ? pinsTotal / gamesTotal : NaN
+  };
+}
+
+// Spiel- und Summenzeilen für die gespeicherte Tabelle.
+function lgBuildRows(players, games) {
+  const c = lgCompute(players, games);
+  const keys = players.map(lgPlayerKey);
+  const rows = [];
+
+  games.forEach((g, gi) => {
+    const d = c.perGame[gi];
+    if (isNaN(d.own) && !String(g.gegner || "").trim()) return;   // komplett leere Zeile
+    const v = {
+      spiel: String(gi + 1),
+      gegner: String(g.gegner || "").trim(),
+      gegner_erg: String(g.gegnerErg || "").trim(),
+      eigenes_erg: isNaN(d.own) ? "" : String(d.own),
+      punkte: isNaN(d.punkte) ? "" : String(d.punkte)
+    };
+    keys.forEach((k, i) => v[k] = isNaN(d.scores[i]) ? "" : String(d.scores[i]));
+    rows.push(v);
+  });
+
+  const summary = (label, perPlayerFn, gesamt, gegner) => {
+    const v = { _summary: "1", spiel: "", gegner: label, gegner_erg: gegner ?? "", eigenes_erg: gesamt, punkte: "" };
+    keys.forEach((k, i) => v[k] = perPlayerFn(i));
+    return v;
+  };
+  rows.push(summary(LG_SUMMARY_LABELS.summe,
+    i => String(c.perPlayer[i].pins),
+    String(c.pinsTotal),
+    c.gegnerSumme ? String(c.gegnerSumme) : ""));
+  rows[rows.length - 1].punkte = String(c.punkteTotal);
+  rows.push(summary(LG_SUMMARY_LABELS.spiele, i => String(c.perPlayer[i].spiele), String(c.spieleTotal)));
+  rows.push(summary(LG_SUMMARY_LABELS.schnitt,
+    i => isNaN(c.perPlayer[i].schnitt) ? "" : lgFmt1(c.perPlayer[i].schnitt),
+    isNaN(c.schnittTotal) ? "" : lgFmt1(c.schnittTotal)));
+  return rows;
+}
+
+// Bestehende Tabelle zurück in den Editor-Zustand lesen.
+function lgParse(table) {
+  const cols = safeJson(table.columnsJson) || [];
+  const pCols = cols.filter(c => String(c.key || "").startsWith("p_"));
+  const players = pCols.map(c => c.label || c.key);
+  const games = (table.rows || [])
+    .map(r => safeJson(r.valuesJson) || {})
+    .filter(v => v._summary !== "1")
+    .map(v => ({
+      gegner: v.gegner || "",
+      gegnerErg: v.gegner_erg || "",
+      scores: pCols.map(c => v[c.key] || "")
+    }));
+  const startNr = (String(table.title || "").match(/(\d+)\s*\.\s*Start/) || [])[1] || "";
+  const parts = String(table.subtitle || "").split("·").map(s => s.trim());
+  return { players, games, startNr, datum: parts[0] || "", anlage: parts[1] || "" };
+}
+
+async function openLigaSpieltagEditor(existing, seasons) {
+  const isEdit = !!existing;
+  const seasonsSorted = [...seasons].sort((a, b) =>
+    (a.sortOrder || 0) - (b.sortOrder || 0) || b.name.localeCompare(a.name, "de-DE", { numeric: true }));
+  const parsed = isEdit ? lgParse(existing) : null;
+
+  const state = {
+    isEdit,
+    tableId: isEdit ? existing.id : null,
+    seasonId: isEdit ? existing.seasonId : ((seasonsSorted.find(s => s.isCurrent) || seasonsSorted[0] || {}).id ?? null),
+    sortOrder: isEdit ? (existing.sortOrder || 0) : 0,
+    teamId: null,
+    teamName: isEdit ? String(existing.title || "").split("–")[0].trim() : "",
+    startNr: isEdit ? parsed.startNr : "",
+    datum: isEdit ? parsed.datum : "",
+    anlage: isEdit ? parsed.anlage : "",
+    players: isEdit ? parsed.players : [],
+    games: isEdit ? parsed.games : [],
+    teams: [],
+    roster: []
+  };
+
+  const body = `
+    <div class="lg-editor">
+    <div class="row" style="align-items:flex-end">
+      <div class="field"><label>Saison</label><span class="select-wrap"><select id="lg-season">${
+        seasonsSorted.map(s => `<option value="${s.id}" ${s.id === state.seasonId ? "selected" : ""}>${escapeHtml(s.name)}</option>`).join("")
+      }</select></span></div>
+      <div class="field"><label>Mannschaft</label><span class="select-wrap"><select id="lg-team"></select></span></div>
+      <div class="field" style="max-width:9rem"><label>Start-Nr.</label><input type="text" id="lg-start" inputmode="numeric" value="${escapeHtml(state.startNr)}" placeholder="5"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Datum</label><input type="text" id="lg-datum" value="${escapeHtml(state.datum)}" placeholder="29.03.2026"></div>
+      <div class="field"><label>Anlage</label><input type="text" id="lg-anlage" value="${escapeHtml(state.anlage)}" placeholder="Reutlingen"></div>
+    </div>
+    <div id="lg-hint" class="hint" style="margin:.2rem 0 .7rem"></div>
+    <div class="mp-tools" style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.5rem">
+      <span class="select-wrap"><select id="lg-add"><option value="">+ Spieler hinzufügen …</option></select></span>
+      <button type="button" class="btn btn-sm btn-neutral" id="lg-addgame">+ Spiel</button>
+      <span class="hint" style="margin-left:auto">Leeres Gegner-Ergebnis = Blind (2 Punkte). Leere Spielerzelle = nicht mitgespielt.</span>
+    </div>
+    <div style="overflow-x:auto"><table class="rows-table mp-table lg-table" id="lg-rows"></table></div>
+    </div>`;
+
+  const m = openModal(isEdit ? "Liga-Spieltag bearbeiten" : "Neuer Liga-Spieltag", body,
+    `<button class="btn btn-neutral" id="lg-cancel">Abbrechen</button><button class="btn" id="lg-save">Speichern</button>`, true);
+
+  const hintBox = m.querySelector("#lg-hint");
+  const rowsTable = m.querySelector("#lg-rows");
+  const addSel = m.querySelector("#lg-add");
+  const teamSel = m.querySelector("#lg-team");
+
+  // ---- Zustand aus dem DOM lesen ----
+  function syncFromDom() {
+    state.games = Array.from(rowsTable.querySelectorAll("tbody tr")).map(tr => ({
+      gegner: (tr.querySelector('[data-key="gegner"]') || {}).value || "",
+      gegnerErg: (tr.querySelector('[data-key="gegner_erg"]') || {}).value || "",
+      scores: Array.from(tr.querySelectorAll("[data-p]")).map(inp => inp.value)
+    }));
+    state.startNr = m.querySelector("#lg-start").value.trim();
+    state.datum = m.querySelector("#lg-datum").value.trim();
+    state.anlage = m.querySelector("#lg-anlage").value.trim();
+  }
+
+  function titleOf() {
+    const team = state.teamName || "Mannschaft";
+    return state.startNr ? `${team} – ${state.startNr}. Start` : `${team} – Spieltag${state.datum ? " " + state.datum : ""}`;
+  }
+  function subtitleOf() {
+    return [state.datum, state.anlage].filter(Boolean).join(" · ") || null;
+  }
+  function updateHint() {
+    hintBox.textContent = `Titel: „${titleOf()}“${subtitleOf() ? ` · ${subtitleOf()}` : ""} · ${state.players.length} Spieler`;
+  }
+
+  // ---- Tabelle zeichnen + live rechnen ----
+  function recompute() {
+    syncFromDom();
+    const c = lgCompute(state.players, state.games);
+    rowsTable.querySelectorAll("tbody tr").forEach((tr, gi) => {
+      const d = c.perGame[gi];
+      tr.querySelector('[data-calc="eigenes_erg"]').textContent = isNaN(d.own) ? "" : String(d.own);
+      const p = tr.querySelector('[data-calc="punkte"]');
+      p.textContent = isNaN(d.punkte) ? "" : String(d.punkte);
+      p.classList.toggle("lg-win", d.punkte > 0);
+    });
+    const set = (sel, txt) => { const el = rowsTable.querySelector(sel); if (el) el.textContent = txt; };
+    set('[data-sum="gegner"]', c.gegnerSumme ? String(c.gegnerSumme) : "");
+    set('[data-sum="eigenes_erg"]', String(c.pinsTotal));
+    set('[data-sum="punkte"]', String(c.punkteTotal));
+    set('[data-games="eigenes_erg"]', String(c.spieleTotal));
+    set('[data-avg="eigenes_erg"]', isNaN(c.schnittTotal) ? "" : lgFmt1(c.schnittTotal));
+    state.players.forEach((_, i) => {
+      // Spieler ohne Einsatz bleiben leer statt „0“ – sie fallen beim Speichern ohnehin raus.
+      const p = c.perPlayer[i];
+      set(`[data-sum="p${i}"]`, p.spiele ? String(p.pins) : "");
+      set(`[data-games="p${i}"]`, p.spiele ? String(p.spiele) : "");
+      set(`[data-avg="p${i}"]`, isNaN(p.schnitt) ? "" : lgFmt1(p.schnitt));
+    });
+    updateHint();
+  }
+
+  function renderRows() {
+    const pHead = state.players.map((p, i) =>
+      `<th>${escapeHtml(p)}<button type="button" class="x lg-delp" data-p="${i}" title="Spieler entfernen">×</button></th>`).join("");
+    const head = `<thead><tr>
+      <th class="rownum">Spiel</th><th>Gegner</th><th>Gegner<br>Ergebnis</th>${pHead}
+      <th>Eigenes<br>Ergebnis</th><th>Punkte</th><th></th></tr></thead>`;
+
+    const bodyRows = state.games.map((g, gi) => `<tr>
+      <td class="rownum">${gi + 1}</td>
+      <td><input data-key="gegner" value="${escapeHtml(g.gegner || "")}" class="mp-name"></td>
+      <td><input data-key="gegner_erg" value="${escapeHtml(g.gegnerErg || "")}" class="mp-num" inputmode="numeric"></td>
+      ${state.players.map((_, i) =>
+        `<td><input data-p="${i}" value="${escapeHtml(g.scores[i] || "")}" class="mp-num" inputmode="numeric"></td>`).join("")}
+      <td class="mp-calc" data-calc="eigenes_erg"></td>
+      <td class="mp-calc" data-calc="punkte"></td>
+      <td class="rownum"><button type="button" class="x lg-delg" data-g="${gi}" title="Spiel entfernen" style="background:none;border:0;cursor:pointer;color:var(--color-danger)">×</button></td>
+    </tr>`).join("");
+
+    const footCell = (attr, key) => `<td class="mp-calc" data-${attr}="${key}"></td>`;
+    const foot = `<tfoot>
+      <tr class="lg-sum"><td colspan="2">Summe</td>${footCell("sum", "gegner")}
+        ${state.players.map((_, i) => footCell("sum", "p" + i)).join("")}${footCell("sum", "eigenes_erg")}${footCell("sum", "punkte")}<td></td></tr>
+      <tr><td colspan="3">Spiele</td>
+        ${state.players.map((_, i) => footCell("games", "p" + i)).join("")}${footCell("games", "eigenes_erg")}<td></td><td></td></tr>
+      <tr><td colspan="3">Schnitt</td>
+        ${state.players.map((_, i) => footCell("avg", "p" + i)).join("")}${footCell("avg", "eigenes_erg")}<td></td><td></td></tr>
+    </tfoot>`;
+
+    rowsTable.innerHTML = head + `<tbody>${bodyRows}</tbody>` + foot;
+    rowsTable.querySelectorAll("input").forEach(inp => inp.addEventListener("input", recompute));
+    rowsTable.querySelectorAll(".lg-delg").forEach(b => b.addEventListener("click", () => {
+      syncFromDom(); state.games.splice(Number(b.dataset.g), 1); renderRows();
+    }));
+    rowsTable.querySelectorAll(".lg-delp").forEach(b => b.addEventListener("click", () => {
+      syncFromDom();
+      const i = Number(b.dataset.p);
+      state.players.splice(i, 1);
+      state.games.forEach(g => g.scores.splice(i, 1));
+      renderRows(); refreshAddSelect();
+    }));
+    recompute();
+  }
+
+  function refreshAddSelect() {
+    const present = new Set(state.players);
+    const avail = state.roster
+      .filter(p => p.isActive !== false)
+      .map(p => `${p.firstName} ${p.lastName}`)
+      .filter(n => !present.has(n))
+      .sort((a, b) => a.localeCompare(b, "de"));
+    addSel.innerHTML = `<option value="">+ Spieler hinzufügen …</option>` +
+      avail.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("") +
+      `<option value="__guest__">— Gastspieler (Name eintippen) —</option>`;
+    addSel.disabled = state.players.length >= LG_MAX_PLAYERS;
+  }
+
+  function addPlayer(name) {
+    if (!name || state.players.includes(name)) return;
+    if (state.players.length >= LG_MAX_PLAYERS) { toast(`Mehr als ${LG_MAX_PLAYERS} Spieler sind nicht vorgesehen.`, "err"); return; }
+    syncFromDom();
+    state.players.push(name);
+    state.games.forEach(g => g.scores.push(""));
+    renderRows(); refreshAddSelect();
+  }
+
+  addSel.addEventListener("change", async () => {
+    const val = addSel.value;
+    addSel.value = "";
+    if (!val) return;
+    if (val === "__guest__") {
+      const name = await promptDialog("Gastspieler", "Name des Spielers:", "", "Hinzufügen");
+      if (name) addPlayer(name.trim());
+      return;
+    }
+    addPlayer(val);
+  });
+
+  m.querySelector("#lg-addgame").addEventListener("click", () => {
+    syncFromDom();
+    if (state.games.length >= LG_MAX_GAMES) { toast(`Mehr als ${LG_MAX_GAMES} Spiele sind nicht vorgesehen.`, "err"); return; }
+    state.games.push({ gegner: "", gegnerErg: "", scores: state.players.map(() => "") });
+    renderRows();
+  });
+
+  ["#lg-start", "#lg-datum", "#lg-anlage"].forEach(sel =>
+    m.querySelector(sel).addEventListener("input", () => { syncFromDom(); updateHint(); }));
+  m.querySelector("#lg-season").addEventListener("change", e => { state.seasonId = Number(e.target.value); });
+
+  // ---- Mannschaft wählen -> Kader übernehmen ----
+  async function loadTeam(teamId, keepScores) {
+    state.teamId = teamId;
+    const team = state.teams.find(t => t.id === teamId);
+    state.teamName = team ? team.name : state.teamName;
+    state.roster = teamId ? await SVF.get(`/api/admin/players?teamId=${teamId}`).catch(() => []) : [];
+    if (!keepScores) {
+      syncFromDom();
+      state.players = state.roster
+        .filter(p => p.isActive !== false)
+        .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+        .slice(0, LG_MAX_PLAYERS)
+        .map(p => `${p.firstName} ${p.lastName}`);
+      state.games = Array.from({ length: state.games.length || LG_DEFAULT_GAMES }, (_, i) => ({
+        gegner: (state.games[i] || {}).gegner || "",
+        gegnerErg: (state.games[i] || {}).gegnerErg || "",
+        scores: state.players.map(() => "")
+      }));
+    }
+    renderRows(); refreshAddSelect();
+  }
+  teamSel.addEventListener("change", async e => {
+    const id = Number(e.target.value) || null;
+    if (state.players.length && state.games.some(g => g.scores.some(s => s !== ""))) {
+      if (!(await confirmDialog("Mannschaft wechseln",
+        "Die eingetragenen Einzelergebnisse gehen dabei verloren. Wirklich wechseln?", "Wechseln", "Abbrechen", true))) {
+        teamSel.value = String(state.teamId || "");
+        return;
+      }
+    }
+    await loadTeam(id, false);
+  });
+
+  // ---- Speichern ----
+  m.querySelector("#lg-cancel").addEventListener("click", () => closeModal(m));
+  m.querySelector("#lg-save").addEventListener("click", async () => {
+    syncFromDom();
+    if (!state.players.length) { toast("Bitte zuerst eine Mannschaft wählen.", "err"); return; }
+    const c = lgCompute(state.players, state.games);
+    const withData = c.perGame.filter(g => !isNaN(g.own)).length;
+    if (!withData) { toast("Noch keine Einzelergebnisse eingetragen.", "err"); return; }
+    const ohneGegner = state.games.filter((g, i) => !isNaN(c.perGame[i].own) && !String(g.gegner || "").trim()).length;
+    if (ohneGegner && !(await confirmDialog("Gegner fehlt",
+      `${ohneGegner} Spiel(e) haben Ergebnisse, aber keinen Gegnernamen. Trotzdem speichern?`, "Speichern", "Zurück"))) return;
+
+    // Spieler ohne ein einziges Ergebnis kommen nicht in die Tabelle – so kann die
+    // Mannschaft bequem komplett vorbelegt werden, ohne leere Spalten zu erzeugen.
+    const usedIdx = state.players.map((_, i) => i).filter(i => c.perPlayer[i].spiele > 0);
+    const dropped = state.players.length - usedIdx.length;
+    if (dropped && !(await confirmDialog("Speichern",
+      `${usedIdx.length} Spieler haben Ergebnisse – ${dropped} ohne Einsatz werden nicht in die Tabelle übernommen. Fortfahren?`,
+      "Speichern", "Abbrechen"))) return;
+    const players = usedIdx.map(i => state.players[i]);
+    const games = state.games.map(g => ({ ...g, scores: usedIdx.map(i => g.scores[i]) }));
+
+    const payload = {
+      title: titleOf(),
+      subtitle: subtitleOf(),
+      type: LG_TYPE,
+      seasonId: state.seasonId,
+      sortOrder: state.isEdit ? state.sortOrder : -(Number(state.startNr) || 1),
+      isPublished: true,
+      columnsJson: JSON.stringify(lgColumns(players)),
+      rows: lgBuildRows(players, games).map((v, i) => ({ sortOrder: i, valuesJson: JSON.stringify(v) }))
+    };
+    try {
+      if (state.isEdit) await SVF.send("PUT", `/api/admin/standings/${state.tableId}`, payload);
+      else await SVF.send("POST", "/api/admin/standings", payload);
+      closeModal(m);
+      toast(`Spieltag gespeichert – ${c.punkteTotal} Punkte, ${c.pinsTotal} Pins.`);
+      go("standings");
+    } catch (e) { toast(e.message, "err"); }
+  });
+
+  // ---- Initialisierung ----
+  state.teams = await SVF.get("/api/admin/teams").catch(() => []);
+  const guess = state.teams.find(t => t.name === state.teamName);
+  teamSel.innerHTML = `<option value="">– bitte wählen –</option>` + state.teams.map(t =>
+    `<option value="${t.id}" ${guess && guess.id === t.id ? "selected" : ""}>${escapeHtml(t.name)}</option>`).join("");
+  if (isEdit) {
+    // Kader nur nachladen (für „+ Spieler“), Spalten/Werte bleiben wie gespeichert.
+    if (guess) await loadTeam(guess.id, true); else { renderRows(); refreshAddSelect(); }
+  } else if (state.teams.length) {
+    renderRows(); refreshAddSelect();
+  }
+  updateHint();
 }
