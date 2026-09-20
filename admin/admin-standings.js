@@ -116,12 +116,17 @@ async function openStandingsEditor(table, seasons, opts = {}) {
   const isEdit = !!src && !isCopy;
   let cols = [];
   let rows = [];
+  let tabs = [];                              // [{ id, label, subtitle }] – leer = keine Reiter
   if (src) {
     try { cols = JSON.parse(src.columnsJson || "[]"); } catch { cols = []; }
+    try { tabs = JSON.parse(src.tabsJson || "[]"); } catch { tabs = []; }
+    if (!Array.isArray(tabs)) tabs = [];
+    tabs = tabs.filter(t => t && t.id).map(t => ({ id: String(t.id), label: String(t.label || t.id), subtitle: t.subtitle || "" }));
     rows = (src.rows || []).map(r => ({ values: safeJson(r.valuesJson) || {} }));
   } else {
     cols = JSON.parse(PRESET_FALLBACK.Liga);
   }
+  let tabsOn = tabs.length > 0;
 
   // Neue Tabellen: neueste Saison vorauswählen (seasons kommt bereits neueste-zuerst vom Server).
   const defaultSeasonId = src ? src.seasonId : (seasons[0] ? seasons[0].id : null);
@@ -150,6 +155,23 @@ async function openStandingsEditor(table, seasons, opts = {}) {
     <div class="col-editor" id="cols"></div>
     <button type="button" class="btn btn-sm btn-neutral" id="add-col">+ Spalte</button>
 
+    <hr style="border:none;border-top:1px solid var(--color-border);margin:1rem 0">
+    <div class="field" style="margin-bottom:.4rem">
+      <label class="check"><input type="checkbox" id="st-tabs-on" ${tabsOn ? "checked" : ""}> Tabelle in Reiter aufteilen</label>
+    </div>
+    <div id="tabs-section" ${tabsOn ? "" : "hidden"}>
+      <span class="hint">Jeder Reiter wird auf der Website als eigener Knopf über der Tabelle angezeigt –
+        z. B. ein Reiter je Mannschaft. Die Zuordnung der Zeilen erfolgt unten in der Spalte „Reiter“.
+        Zeilen ohne Zuordnung landen im ersten Reiter.</span>
+      <div class="tab-editor" id="tabs"></div>
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-top:.5rem">
+        <button type="button" class="btn btn-sm btn-neutral" id="add-tab">+ Reiter</button>
+        <span class="hint">oder automatisch aus einer Spalte:</span>
+        <label class="select-wrap"><select id="tabs-from-col"></select></label>
+        <button type="button" class="btn btn-sm btn-neutral" id="tabs-from-col-go">Reiter erzeugen</button>
+      </div>
+    </div>
+
     <div style="margin:1.2rem 0 .4rem"><strong>Zeilen</strong></div>
     <div style="overflow-x:auto"><table class="rows-table" id="rows"></table></div>
     <button type="button" class="btn btn-sm btn-neutral" id="add-row" style="margin-top:.6rem">+ Zeile</button>`;
@@ -159,14 +181,24 @@ async function openStandingsEditor(table, seasons, opts = {}) {
 
   const colsBox = m.querySelector("#cols");
   const rowsTable = m.querySelector("#rows");
+  const tabsBox = m.querySelector("#tabs");
+  const tabsSection = m.querySelector("#tabs-section");
 
   function syncRowsFromDom() {
     const trs = rowsTable.querySelectorAll("tbody tr");
+    const prev = rows;
     rows = Array.from(trs).map(tr => {
+      // Meta-Schlüssel (_summary, _tab …) hängen an keiner Spalte und müssen
+      // aus der Vorlage übernommen werden, sonst gehen sie beim Speichern verloren.
+      const old = prev[Number(tr.dataset.idx)] || {};
       const values = {};
-      tr.querySelectorAll("input[data-key]").forEach(inp => values[inp.dataset.key] = inp.value);
+      Object.keys(old.values || {}).forEach(k => { if (k.startsWith("_")) values[k] = old.values[k]; });
+      tr.querySelectorAll("[data-key]").forEach(el => values[el.dataset.key] = el.value);
       return { values };
     });
+    // Indizes nachziehen, damit ein zweites Sync ohne Neuaufbau (z. B. Reiter-Wechsel
+    // nach einem Drag) weiterhin die richtigen Meta-Werte findet.
+    trs.forEach((tr, i) => tr.dataset.idx = i);
   }
   function initRowDrag() {
     let dragEl = null;
@@ -253,16 +285,153 @@ async function openStandingsEditor(table, seasons, opts = {}) {
       renderCols(); renderRows();
     }));
     initColDrag();
+    renderTabColOptions();
   }
+  // Reiter-Auswahl je Zeile (nur sichtbar, wenn Reiter aktiv sind).
+  function tabCell(r) {
+    if (!tabsOn) return "";
+    const cur = String(r.values._tab ?? "");
+    const opts = `<option value="">– erster Reiter –</option>` + tabs.map(t =>
+      `<option value="${escapeHtml(t.id)}" ${t.id === cur ? "selected" : ""}>${escapeHtml(t.label)}</option>`).join("");
+    return `<td class="tab-cell"><select data-key="_tab">${opts}</select></td>`;
+  }
+
   function renderRows() {
-    const head = `<thead><tr><th class="drag-cell"></th><th class="rownum">#</th>${cols.map(c => `<th>${escapeHtml(c.label)}</th>`).join("")}<th></th></tr></thead>`;
-    const bdy = `<tbody>${rows.map((r, i) => `<tr><td class="drag-cell"><span class="drag-handle row-drag-handle" title="Ziehen zum Sortieren">⠿</span></td><td class="rownum">${i + 1}</td>${cols.map(c =>
+    const head = `<thead><tr><th class="drag-cell"></th><th class="rownum">#</th>${tabsOn ? `<th>Reiter</th>` : ""}${cols.map(c => `<th>${escapeHtml(c.label)}</th>`).join("")}<th></th></tr></thead>`;
+    const bdy = `<tbody>${rows.map((r, i) => `<tr data-idx="${i}"><td class="drag-cell"><span class="drag-handle row-drag-handle" title="Ziehen zum Sortieren">⠿</span></td><td class="rownum">${i + 1}</td>${tabCell(r)}${cols.map(c =>
       `<td><input data-key="${c.key}" value="${escapeHtml(r.values[c.key] ?? "")}"></td>`).join("")}
       <td class="rownum"><button type="button" class="x" data-rmrow="${i}" style="background:none;border:0;cursor:pointer;color:var(--color-danger)">×</button></td></tr>`).join("")}</tbody>`;
     rowsTable.innerHTML = head + bdy;
     rowsTable.querySelectorAll("[data-rmrow]").forEach(b => b.addEventListener("click", () => { syncRowsFromDom(); rows.splice(b.dataset.rmrow, 1); renderRows(); }));
+    // Zeilenzähler der Reiter aktuell halten, ohne die ganze Tabelle neu zu bauen.
+    rowsTable.querySelectorAll('select[data-key="_tab"]').forEach(sel =>
+      sel.addEventListener("change", () => { syncRowsFromDom(); renderTabs(); }));
     initRowDrag();
   }
+
+  // ---------------- Reiter (Tabs) ----------------
+  function newTabId() {
+    let n = tabs.length + 1;
+    while (tabs.some(t => t.id === "tab" + n)) n++;
+    return "tab" + n;
+  }
+  function tabRowCount(id, isFirst) {
+    return rows.filter(r => {
+      const cur = String(r.values._tab ?? "");
+      return cur === id || (isFirst && !tabs.some(t => t.id === cur));
+    }).length;
+  }
+  function readTabsFromDom() {
+    return [...tabsBox.querySelectorAll(".tab-row")].map(el => ({
+      id: el.dataset.id,
+      label: el.querySelector(".tab-label").value,
+      subtitle: el.querySelector(".tab-sub").value
+    }));
+  }
+  function initTabDrag() {
+    let dragEl = null;
+    tabsBox.querySelectorAll(".tab-row").forEach(el => {
+      const handle = el.querySelector(".tab-drag-handle");
+      if (!handle) return;
+      handle.addEventListener("mousedown", () => { el.draggable = true; });
+      handle.addEventListener("touchstart", () => { el.draggable = true; }, { passive: true });
+      el.addEventListener("dragstart", e => {
+        dragEl = el; el.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        try { e.dataTransfer.setData("text/plain", "tab"); } catch { /* */ }
+      });
+      el.addEventListener("dragover", e => {
+        e.preventDefault();
+        if (!dragEl || dragEl === el) return;
+        const rect = el.getBoundingClientRect();
+        const after = (e.clientY - rect.top) > rect.height / 2;
+        el.parentNode.insertBefore(dragEl, after ? el.nextSibling : el);
+      });
+      el.addEventListener("dragend", () => {
+        el.classList.remove("dragging"); el.draggable = false;
+        if (!dragEl) return;
+        dragEl = null;
+        tabs = readTabsFromDom();
+        syncRowsFromDom();
+        renderTabs(); renderRows();
+      });
+    });
+  }
+  function renderTabs() {
+    tabsBox.innerHTML = tabs.length
+      ? tabs.map((t, i) => `<div class="tab-row" data-id="${escapeHtml(t.id)}">
+          <span class="drag-handle tab-drag-handle" title="Ziehen zum Sortieren">⠿</span>
+          <input class="tab-label" value="${escapeHtml(t.label)}" placeholder="Name des Reiters">
+          <input class="tab-sub" value="${escapeHtml(t.subtitle || "")}" placeholder="Untertitel (optional)">
+          <span class="tab-count">${tabRowCount(t.id, i === 0)} Zeilen</span>
+          <button type="button" class="x" data-rmtab="${escapeHtml(t.id)}" title="Reiter entfernen">×</button>
+        </div>`).join("")
+      : `<div class="hint">Noch kein Reiter angelegt.</div>`;
+    tabsBox.querySelectorAll(".tab-label, .tab-sub").forEach(inp => inp.addEventListener("change", () => {
+      tabs = readTabsFromDom();
+      renderRows();   // Reiter-Auswahl in den Zeilen zeigt die neuen Namen
+    }));
+    tabsBox.querySelectorAll("[data-rmtab]").forEach(b => b.addEventListener("click", () => {
+      syncRowsFromDom();
+      tabs = readTabsFromDom().filter(t => t.id !== b.dataset.rmtab);
+      // Zeilen des gelöschten Reiters verlieren nur ihre Zuordnung, bleiben aber erhalten.
+      rows.forEach(r => { if (String(r.values._tab ?? "") === b.dataset.rmtab) delete r.values._tab; });
+      renderTabs(); renderRows();
+    }));
+    initTabDrag();
+  }
+  function renderTabColOptions() {
+    m.querySelector("#tabs-from-col").innerHTML =
+      cols.map(c => `<option value="${escapeHtml(c.key)}">${escapeHtml(c.label)}</option>`).join("");
+  }
+
+  m.querySelector("#st-tabs-on").addEventListener("change", e => {
+    tabsOn = e.target.checked;
+    tabsSection.hidden = !tabsOn;
+    syncRowsFromDom();
+    if (tabsOn && !tabs.length) tabs = [{ id: newTabId(), label: "Reiter 1", subtitle: "" }];
+    renderTabs(); renderRows();
+  });
+  m.querySelector("#add-tab").addEventListener("click", async () => {
+    const label = await promptDialog("Neuer Reiter", "Beschriftung des Reiters:", "", "Hinzufügen");
+    if (!label) return;
+    syncRowsFromDom();
+    tabs = readTabsFromDom();
+    tabs.push({ id: newTabId(), label, subtitle: "" });
+    renderTabs(); renderRows();
+  });
+
+  // Komfort: aus den Werten einer Spalte automatisch je einen Reiter bauen und die
+  // Zeilen passend zuordnen – z. B. aus der Spalte „Liga“ einer Übersichtstabelle.
+  m.querySelector("#tabs-from-col-go").addEventListener("click", async () => {
+    syncRowsFromDom();
+    tabs = readTabsFromDom();
+    const key = m.querySelector("#tabs-from-col").value;
+    const col = cols.find(c => c.key === key);
+    if (!col) { toast("Bitte eine Spalte wählen.", "err"); return; }
+    const values = [];
+    rows.forEach(r => {
+      const v = String(r.values[key] ?? "").trim();
+      if (v && !values.includes(v)) values.push(v);
+    });
+    if (!values.length) { toast(`Die Spalte „${col.label}“ enthält keine Werte.`, "err"); return; }
+    const blanks = rows.filter(r => cols.every(c => String(r.values[c.key] ?? "").trim() === "")).length;
+    const ok = await confirmDialog("Reiter erzeugen",
+      `${values.length} Reiter aus der Spalte „${col.label}“ anlegen und alle Zeilen zuordnen?` +
+      (blanks ? ` ${blanks} leere Trennzeile${blanks === 1 ? "" : "n"} wird dabei entfernt.` : "") +
+      " Bereits angelegte Reiter werden ersetzt.",
+      "Erzeugen", "Abbrechen");
+    if (!ok) return;
+    tabs = values.map((v, i) => ({ id: "tab" + (i + 1), label: v, subtitle: "" }));
+    rows = rows.filter(r => cols.some(c => String(r.values[c.key] ?? "").trim() !== ""));
+    rows.forEach(r => {
+      const v = String(r.values[key] ?? "").trim();
+      const t = tabs.find(x => x.label === v);
+      if (t) r.values._tab = t.id; else delete r.values._tab;
+    });
+    renderTabs(); renderRows();
+    toast(`${tabs.length} Reiter angelegt. Die Spalte „${col.label}“ kann jetzt oben entfernt werden.`);
+  });
 
   m.querySelector("#add-col").addEventListener("click", async () => {
     syncRowsFromDom();
@@ -293,9 +462,12 @@ async function openStandingsEditor(table, seasons, opts = {}) {
   m.querySelector("#cancel").addEventListener("click", closeModal);
   m.querySelector("#save").addEventListener("click", async () => {
     syncRowsFromDom();
+    if (tabsOn) tabs = readTabsFromDom();
     const title = m.querySelector("#st-title").value.trim();
     if (!title) { toast("Bitte einen Titel angeben.", "err"); return; }
     if (!cols.length) { toast("Mindestens eine Spalte anlegen.", "err"); return; }
+    if (tabsOn && !tabs.length) { toast("Mindestens einen Reiter anlegen – oder die Reiter abschalten.", "err"); return; }
+    if (tabsOn && tabs.some(t => !String(t.label).trim())) { toast("Jeder Reiter braucht eine Beschriftung.", "err"); return; }
     // Bestehende Tabellen behalten ihre Reihenfolge; neue landen ganz oben
     let sortOrder;
     if (isEdit) {
@@ -313,6 +485,11 @@ async function openStandingsEditor(table, seasons, opts = {}) {
       sortOrder,
       isPublished: m.querySelector("#st-pub").checked,
       columnsJson: JSON.stringify(cols.map(c => ({ key: c.key, label: c.label, type: c.type || "text" }))),
+      // Ohne Reiter wird null gespeichert – die Zuordnung in den Zeilen (_tab) bleibt
+      // aber erhalten, damit ein späteres Wiedereinschalten nichts verliert.
+      tabsJson: tabsOn && tabs.length
+        ? JSON.stringify(tabs.map(t => ({ id: t.id, label: String(t.label).trim(), subtitle: String(t.subtitle || "").trim() || undefined })))
+        : null,
       rows: rows.map((r, i) => ({ sortOrder: i, valuesJson: JSON.stringify(r.values || {}) }))
     };
     try {
@@ -322,7 +499,7 @@ async function openStandingsEditor(table, seasons, opts = {}) {
     } catch (e) { toast(e.message, "err"); }
   });
 
-  renderCols(); renderRows();
+  renderCols(); renderTabs(); renderRows();
 }
 
 // Presets vom Server (mit lokalem Fallback, falls Endpoint nicht erreichbar)
@@ -735,6 +912,9 @@ async function openMonatspokalEditor(existing, seasons) {
       sortOrder: state.isEdit ? state.sortOrder : state.monthIdx,
       isPublished: true,
       columnsJson: JSON.stringify(MP_MONTH_COLS),
+      // Reiter werden hier nicht bearbeitet – vorhandene aber unverändert durchreichen,
+      // sonst würde ein Speichern im geführten Editor sie stillschweigend löschen.
+      tabsJson: existing ? (existing.tabsJson || null) : null,
       rows: finalRows.map((v, i) => ({ sortOrder: i, valuesJson: JSON.stringify(v) }))
     };
     try {
@@ -846,6 +1026,7 @@ async function mpRebuildGesamt(seasonId) {
     sortOrder: existing ? (existing.sortOrder ?? -1) : -1,
     isPublished: true,
     columnsJson: JSON.stringify(columns),
+    tabsJson: existing ? (existing.tabsJson || null) : null,
     rows: rows.map((v, i) => ({ sortOrder: i, valuesJson: JSON.stringify(v) }))
   };
   if (existing) { await SVF.send("PUT", `/api/admin/standings/${existing.id}`, payload); toast("Gesamtwertung aktualisiert."); }
@@ -1221,6 +1402,8 @@ async function openLigaSpieltagEditor(existing, seasons) {
       sortOrder: state.isEdit ? state.sortOrder : -(Number(state.startNr) || 1),
       isPublished: true,
       columnsJson: JSON.stringify(lgColumns(players)),
+      // Reiter kommen aus dem generischen Editor – hier nur durchreichen, nicht verwerfen.
+      tabsJson: existing ? (existing.tabsJson || null) : null,
       rows: lgBuildRows(players, games).map((v, i) => ({ sortOrder: i, valuesJson: JSON.stringify(v) }))
     };
     try {

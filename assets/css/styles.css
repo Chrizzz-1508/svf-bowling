@@ -380,6 +380,15 @@ table.data tbody tr.row-summary:hover { background: var(--color-bg-alt); }
 .standings-block h3 { margin-bottom: .25rem; font-size: 1.2rem; }
 .standings-block .sub { color: var(--color-muted); margin-bottom: .8rem; font-size: .92rem; }
 
+/* ---------- Tabellen mit Reitern (eine Tabelle je Mannschaft/Liga) ---------- */
+.standings-tabs { margin: .9rem 0 1rem; }
+.standings-tabbed > .standings-tabpanel > .sub { margin-bottom: .7rem; }
+@media (max-width: 760px) {
+  /* Bei vielen Reitern lieber scrollen als umbrechen – die Leiste bleibt eine Zeile. */
+  .standings-tabs { width: 100%; justify-content: flex-start; }
+  .standings-tabs .tab { padding: .5rem .85rem; font-size: .88rem; }
+}
+
 /* ---------- Breite Ergebnis-Tabellen mehr Platz geben ----------
    Damit breite Wertungen (z. B. Monatspokal-Gesamtwertung mit vielen
    Monatsspalten) möglichst ohne horizontales Scrollen sichtbar sind:

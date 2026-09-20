@@ -22,7 +22,7 @@ public static class StandingsEndpoints
                 .OrderBy(t => t.SortOrder).ThenByDescending(t => t.UpdatedAt)
                 .Select(t => new
                 {
-                    t.Id, t.SeasonId, t.Type, t.Title, t.Subtitle, t.ColumnsJson, t.SortOrder, t.UpdatedAt
+                    t.Id, t.SeasonId, t.Type, t.Title, t.Subtitle, t.ColumnsJson, t.TabsJson, t.SortOrder, t.UpdatedAt
                 })
                 .ToListAsync();
             return Results.Ok(list);
@@ -46,7 +46,7 @@ public static class StandingsEndpoints
             if (seasonId is not null) q = q.Where(t => t.SeasonId == seasonId);
             return Results.Ok(await q
                 .OrderBy(t => t.SortOrder).ThenByDescending(t => t.UpdatedAt)
-                .Select(t => new { t.Id, t.SeasonId, t.Type, t.Title, t.Subtitle, t.ColumnsJson, t.SortOrder, t.IsPublished, t.UpdatedAt })
+                .Select(t => new { t.Id, t.SeasonId, t.Type, t.Title, t.Subtitle, t.ColumnsJson, t.TabsJson, t.SortOrder, t.IsPublished, t.UpdatedAt })
                 .ToListAsync());
         });
 
@@ -78,6 +78,7 @@ public static class StandingsEndpoints
             t.Title = input.Title;
             t.Subtitle = input.Subtitle;
             t.ColumnsJson = input.ColumnsJson;
+            t.TabsJson = input.TabsJson;
             t.SortOrder = input.SortOrder;
             t.IsPublished = input.IsPublished;
             t.UpdatedAt = DateTime.UtcNow;

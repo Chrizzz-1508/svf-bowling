@@ -94,7 +94,22 @@ function externalNewsCard(item) {
   </article>`;
 }
 
-// ---- Generische Ergebnis-Tabelle rendern ----
+// ---- Reiter (Tabs) einer Tabelle: [{ id, label, subtitle }] – leer = keine Reiter ----
+function standingsTabsOf(table) {
+  let tabs = [];
+  try { tabs = JSON.parse(table.tabsJson || "[]"); } catch { tabs = []; }
+  if (!Array.isArray(tabs)) return [];
+  return tabs.filter(t => t && t.id).map(t => ({
+    id: String(t.id),
+    label: String(t.label || t.id),
+    subtitle: t.subtitle ? String(t.subtitle) : ""
+  }));
+}
+
+// Eindeutige IDs, damit mehrere Tabellen auf einer Seite sich nicht in die Quere kommen.
+let standingsTabUid = 0;
+
+// ---- Generische Ergebnis-Tabelle rendern (optional in Reiter aufgeteilt) ----
 function renderStandings(table, hideTitle) {
   let columns = [];
   try { columns = JSON.parse(table.columnsJson || "[]"); } catch { columns = []; }
@@ -102,21 +117,84 @@ function renderStandings(table, hideTitle) {
     const keys = table.rows && table.rows[0] ? Object.keys(safeJson(table.rows[0].valuesJson) || {}) : [];
     columns = keys.map(k => ({ key: k, label: k }));
   }
-  const head = columns.map(c => `<th>${escapeHtml(c.label || c.key)}</th>`).join("");
-  const body = (table.rows || []).map(r => {
-    const v = safeJson(r.valuesJson) || {};
-    // Zeilen mit _summary sind Summen-/Schnitt-Zeilen: hervorgehoben und beim
-    // Sortieren immer unten (sonst rutschen sie mitten in die Tabelle).
-    const isSum = v._summary === "1";
-    return `<tr${isSum ? ' class="row-summary" data-fixed="1"' : ""}>` + columns.map((c, i) =>
-      `<td${i === 0 ? ' class="rank"' : ""}>${escapeHtml(v[c.key] ?? "")}</td>`).join("") + "</tr>";
+  const head = `<thead><tr>${columns.map(c => `<th>${escapeHtml(c.label || c.key)}</th>`).join("")}</tr></thead>`;
+  const grid = list => {
+    const body = list.map(r => {
+      const v = safeJson(r.valuesJson) || {};
+      // Zeilen mit _summary sind Summen-/Schnitt-Zeilen: hervorgehoben und beim
+      // Sortieren immer unten (sonst rutschen sie mitten in die Tabelle).
+      const isSum = v._summary === "1";
+      return `<tr${isSum ? ' class="row-summary" data-fixed="1"' : ""}>` + columns.map((c, i) =>
+        `<td${i === 0 ? ' class="rank"' : ""}>${escapeHtml(v[c.key] ?? "")}</td>`).join("") + "</tr>";
+    }).join("");
+    return `<div class="table-wrap"><table class="data">${head}<tbody>${body}</tbody></table></div>`;
+  };
+  const titleHtml = hideTitle ? "" : `<h3>${escapeHtml(table.title)}</h3>
+    ${table.subtitle ? `<div class="sub">${escapeHtml(table.subtitle)}</div>` : ""}`;
+
+  const rows = table.rows || [];
+  const tabs = standingsTabsOf(table);
+  if (!tabs.length) return `<div class="standings-block">${titleHtml}${grid(rows)}</div>`;
+
+  // Zeilen den Reitern zuordnen; alles ohne (gültige) Zuordnung landet im ersten Reiter.
+  const buckets = new Map(tabs.map(t => [t.id, []]));
+  rows.forEach(r => {
+    const tabId = String((safeJson(r.valuesJson) || {})._tab ?? "");
+    (buckets.get(tabId) || buckets.get(tabs[0].id)).push(r);
+  });
+
+  const uid = `sttab${++standingsTabUid}`;
+  const bar = tabs.map((t, i) =>
+    `<button type="button" class="tab${i === 0 ? " active" : ""}" role="tab" id="${uid}-t${i}"
+      aria-selected="${i === 0 ? "true" : "false"}" aria-controls="${uid}-p${i}" tabindex="${i === 0 ? 0 : -1}"
+      data-tab-target="${uid}-p${i}">${escapeHtml(t.label)}</button>`).join("");
+  const panels = tabs.map((t, i) => {
+    const list = buckets.get(t.id) || [];
+    return `<div class="standings-tabpanel" role="tabpanel" id="${uid}-p${i}" aria-labelledby="${uid}-t${i}"${i === 0 ? "" : " hidden"}>
+      ${t.subtitle ? `<div class="sub">${escapeHtml(t.subtitle)}</div>` : ""}
+      ${list.length ? grid(list) : `<div class="empty">Für diesen Reiter sind noch keine Zeilen eingetragen.</div>`}
+    </div>`;
   }).join("");
-  return `<div class="standings-block">
-    ${hideTitle ? "" : `<h3>${escapeHtml(table.title)}</h3>
-    ${table.subtitle ? `<div class="sub">${escapeHtml(table.subtitle)}</div>` : ""}`}
-    <div class="table-wrap"><table class="data"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
+
+  return `<div class="standings-block standings-tabbed">
+    ${titleHtml}
+    <div class="tabs standings-tabs" role="tablist" aria-label="${escapeHtml(table.title || "Tabelle")}">${bar}</div>
+    ${panels}
   </div>`;
 }
+
+// ---- Reiter umschalten (funktioniert auf Startseite wie Ergebnisseite) ----
+function activateStandingsTab(btn) {
+  const block = btn.closest(".standings-tabbed");
+  if (!block) return;
+  block.querySelectorAll(":scope > .standings-tabs > .tab").forEach(b => {
+    const on = b === btn;
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-selected", on ? "true" : "false");
+    b.tabIndex = on ? 0 : -1;
+  });
+  block.querySelectorAll(":scope > .standings-tabpanel").forEach(p => {
+    p.hidden = p.id !== btn.dataset.tabTarget;
+  });
+}
+
+document.addEventListener("click", e => {
+  const btn = e.target.closest(".standings-tabs [data-tab-target]");
+  if (btn) activateStandingsTab(btn);
+});
+
+// Pfeiltasten wechseln den Reiter (wie von einer Tableiste erwartet).
+document.addEventListener("keydown", e => {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  const btn = e.target.closest && e.target.closest(".standings-tabs [data-tab-target]");
+  if (!btn) return;
+  const all = [...btn.parentNode.querySelectorAll("[data-tab-target]")];
+  const next = all[(all.indexOf(btn) + (e.key === "ArrowRight" ? 1 : -1) + all.length) % all.length];
+  if (!next) return;
+  e.preventDefault();
+  activateStandingsTab(next);
+  next.focus();
+});
 
 // ---- Cache für einzelne Tabellen ----
 const standingsCache = {};

@@ -21,6 +21,16 @@ public class StandingsTable
     /// <summary>JSON-Array von Spalten: [{ "key": "platz", "label": "Platz", "type": "number" }, …].</summary>
     public string ColumnsJson { get; set; } = "[]";
 
+    /// <summary>
+    /// Optionale Reiter (Tabs), um eine Tabelle in mehrere Teiltabellen zu zerlegen – z. B. eine
+    /// Liga-Übersicht mit einem Reiter je Mannschaft. JSON-Array:
+    /// [{ "id": "t1", "label": "Herren 1", "subtitle": "Oberliga 2" }, …].
+    /// null oder leeres Array = keine Reiter, die Tabelle wird wie bisher am Stück angezeigt.
+    /// Die Zuordnung einer Zeile steht in deren <see cref="StandingsRow.ValuesJson"/> unter dem
+    /// Meta-Schlüssel "_tab" (Wert = Tab-Id); Zeilen ohne Treffer landen im ersten Reiter.
+    /// </summary>
+    public string? TabsJson { get; set; }
+
     public int SortOrder { get; set; }
     public bool IsPublished { get; set; } = true;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
