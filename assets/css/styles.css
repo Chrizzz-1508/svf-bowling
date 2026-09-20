@@ -401,10 +401,14 @@ table.data th, table.data td { padding: .5rem .68rem; }
   .results-page .container { max-width: min(1440px, 95vw); }
 }
 @media (min-width: 1100px) {
-  /* Startseiten-Tabelle darf über den Container hinaus die Breite nutzen. */
+  /* Startseiten-Tabelle darf über den Container hinausragen – aber nur so weit,
+     wie die Spalten es wirklich brauchen (fit-content). Schmale Tabellen bleiben
+     dadurch auf Container-Breite, statt mit viel Leerraum aufgeblasen zu werden;
+     breite Wertungen (z. B. Monatspokal-Gesamt) nutzen bis zu 92vw. */
   #home-standings .table-wrap {
-    width: min(1440px, 92vw);
-    max-width: none;
+    width: fit-content;
+    min-width: 100%;
+    max-width: min(1440px, 92vw);
     position: relative;
     left: 50%;
     transform: translateX(-50%);
